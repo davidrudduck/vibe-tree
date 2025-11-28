@@ -6,7 +6,10 @@ export { CommunicationAdapter, BaseAdapter } from './adapters/CommunicationAdapt
 
 // Export services
 export { ShellSessionManager } from './services/ShellSessionManager';
+export { TmuxSessionManager } from './services/TmuxSessionManager';
+export { SessionManagerFactory, type SessionManagerType } from './services/SessionManagerFactory';
 export { TerminalForkManager } from './services/TerminalForkManager';
+export { IdeService, type IDE } from './services/IdeService';
 
 // Export utilities
 export * from './utils/git-parser';
