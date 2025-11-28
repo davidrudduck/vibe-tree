@@ -4,6 +4,7 @@ import fs from 'fs';
 import { shellProcessManager } from './shell-manager';
 import { terminalSettingsManager } from './terminal-settings';
 import { databaseService } from './database';
+import { localServerManager } from './local-server';
 import './ide-detector';
 import { registerIpcHandlers } from './ipc-handlers';
 import { createMenu } from './menu';
@@ -70,13 +71,22 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Initialize database FIRST (migrations will run automatically)
   databaseService.initialize();
 
+  // Start local server for session management
+  try {
+    await localServerManager.start();
+    console.log('[Desktop] Local server started at:', localServerManager.getUrl());
+  } catch (error) {
+    console.error('[Desktop] Failed to start local server:', error);
+    // Continue anyway - will fall back to IPC if needed
+  }
+
   // Initialize terminal settings and shell manager BEFORE creating window
   terminalSettingsManager.initialize();
-  shellProcessManager.initialize();
+  await shellProcessManager.initialize();
 
   createWindow();
   createMenu(mainWindow);
@@ -86,6 +96,7 @@ app.whenReady().then(() => {
   quitManager.initialize(mainWindow);
   quitManager.options.onQuitConfirmed = async () => {
     await shellProcessManager.cleanup();
+    await localServerManager.stop();
     databaseService.close();
   };
 

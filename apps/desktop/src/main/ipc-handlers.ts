@@ -10,12 +10,21 @@ import {
 import { terminalSettingsManager } from './terminal-settings';
 import { databaseService } from './database';
 import { createMenu } from './menu';
+import { localServerManager } from './local-server';
 import fs from 'fs';
 import { execSync } from 'child_process';
 import * as os from 'os';
 import * as path from 'path';
 
 export function registerIpcHandlers(mainWindow: BrowserWindow | null) {
+  // Local server URL
+  ipcMain.handle('server:get-url', () => {
+    return {
+      url: localServerManager.getUrl(),
+      wsUrl: localServerManager.getWebSocketUrl()
+    };
+  });
+
   // Git worktree operations
   ipcMain.handle('git:worktree-list', async (_, projectPath: string) => {
     return listWorktrees(projectPath);
