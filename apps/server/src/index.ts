@@ -11,6 +11,7 @@ import { setupWebSocketHandlers } from './api/websocket';
 import { setupRestRoutes } from './api/rest';
 import { ShellManager } from './services/ShellManager';
 import { AuthService } from './auth/AuthService';
+import { databaseService } from './services/DatabaseService';
 import { getNetworkUrls } from '@vibetree/core';
 
 dotenv.config();
@@ -92,6 +93,9 @@ Possible solutions:
   // Initialize services
   const shellManager = new ShellManager();
   const authService = new AuthService();
+
+  // Initialize database
+  databaseService.initialize();
 
   // Setup REST routes
   setupRestRoutes(app, { shellManager, authService });

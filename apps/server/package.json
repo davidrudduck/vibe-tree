@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@vibetree/core": "workspace:*",
+    "@vibetree/database": "workspace:*",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
