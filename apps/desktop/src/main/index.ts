@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { shellProcessManager } from './shell-manager';
 import { terminalSettingsManager } from './terminal-settings';
+import { databaseService } from './database';
 import './ide-detector';
 import { registerIpcHandlers } from './ipc-handlers';
 import { createMenu } from './menu';
@@ -70,6 +71,9 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Initialize database FIRST (migrations will run automatically)
+  databaseService.initialize();
+
   // Initialize terminal settings and shell manager BEFORE creating window
   terminalSettingsManager.initialize();
   shellProcessManager.initialize();
@@ -82,6 +86,7 @@ app.whenReady().then(() => {
   quitManager.initialize(mainWindow);
   quitManager.options.onQuitConfirmed = async () => {
     await shellProcessManager.cleanup();
+    databaseService.close();
   };
 
   // Auto-open project if specified via environment variable

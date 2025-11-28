@@ -27,29 +27,55 @@ function isPortAvailable(port: number): Promise<boolean> {
   });
 }
 
-// Function to find an available port with simple retry logic
-async function findAvailablePort(): Promise<number> {
+// Function to find an available port with extended retry logic and better error messages
+async function findAvailablePort(startPort = 3002, maxAttempts = 10): Promise<number | null> {
+  // If PORT is explicitly set, try it first
   if (process.env.PORT) {
-    return parseInt(process.env.PORT);
+    const envPort = parseInt(process.env.PORT, 10);
+    if (await isPortAvailable(envPort)) {
+      return envPort;
+    }
+    console.warn(`Configured PORT ${envPort} is not available, searching for alternatives...`);
   }
-  
-  // Start with default port 3002 and try sequential ports if needed
-  let port = 3002;
-  
-  for (let attempt = 0; attempt < 3; attempt++) {
+
+  const triedPorts: number[] = [];
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const port = startPort + attempt;
+    triedPorts.push(port);
+
     if (await isPortAvailable(port)) {
+      if (attempt > 0) {
+        console.log(`Port ${startPort} was not available, using port ${port} instead`);
+      }
       return port;
     }
-    port++; // Try next port
   }
-  
-  // If all 3 attempts fail, let the server fail with a clear error
-  throw new Error(`Could not find available port after 3 attempts starting from ${port - 3}`);
+
+  // Return null to indicate failure
+  return null;
 }
 
 async function startServer() {
   const app = express();
   const PORT = await findAvailablePort();
+
+  if (PORT === null) {
+    console.error(`
+========================================
+ SERVER STARTUP FAILED: No available ports
+========================================
+Tried ports: 3002-3011
+
+Possible solutions:
+1. Kill processes using these ports: lsof -i :3002
+2. Set a different port: PORT=4000 pnpm dev:server
+3. Check for zombie processes: ps aux | grep node
+========================================
+`);
+    process.exit(1);
+  }
+
   const HOST = process.env.HOST || '0.0.0.0';
   const PROJECT_PATH = process.env.PROJECT_PATH || process.cwd();
 

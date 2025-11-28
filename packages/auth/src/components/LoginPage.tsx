@@ -89,22 +89,15 @@ export function LoginPage({ onLoginSuccess, className = '' }: LoginPageProps) {
     );
   }
 
-  // Show info if auth is not required
+  // If auth is not required, show loading while AuthContext processes auto-login
+  // The AuthContext will dispatch LOGIN_SUCCESS, which will set isAuthenticated=true
+  // and this component will no longer be rendered
   if (authConfig && !authConfig.authRequired) {
     return (
       <div className={`min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 ${className}`}>
         <div className="text-center">
-          <div className="mx-auto h-12 w-12 text-green-500 mb-4">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-            No Authentication Required
-          </h2>
-          <p className="text-gray-600 dark:text-gray-400">
-            The server is running in open access mode.
-          </p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Connecting...</p>
         </div>
       </div>
     );

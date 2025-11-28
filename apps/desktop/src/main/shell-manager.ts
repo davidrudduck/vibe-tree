@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow, app } from 'electron';
-import { TerminalForkManager, getSystemDiagnostics, getExtendedDiagnostics, formatExtendedDiagnostics } from '@vibetree/core';
+import { TerminalForkManager, getSystemDiagnostics, getExtendedDiagnostics, formatExtendedDiagnostics, validateWorkerScript } from '@vibetree/core';
 import { terminalSettingsManager } from './terminal-settings';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -33,21 +33,43 @@ class DesktopShellManager {
   }
 
   /**
-   * Get the path to the PTY worker script
+   * Get the path to the PTY worker script with validation
    */
   private getWorkerScriptPath(): string {
     const isDev = !app.isPackaged;
 
-    if (isDev) {
-      // Development: worker is in packages/core/dist/workers/pty-worker.cjs
-      const workerPath = path.join(__dirname, '../../../../packages/core/dist/workers/pty-worker.cjs');
-      console.log('[DesktopShellManager] Worker script path:', workerPath);
-      console.log('[DesktopShellManager] Worker script exists:', fs.existsSync(workerPath));
-      return workerPath;
-    } else {
-      // Production: worker is bundled in app.asar
-      return path.join(app.getAppPath(), 'node_modules/@vibetree/core/dist/workers/pty-worker.cjs');
+    const tryPaths = isDev
+      ? [
+          // Development: worker is in packages/core/dist/workers/pty-worker.cjs
+          path.join(__dirname, '../../../../packages/core/dist/workers/pty-worker.cjs'),
+        ]
+      : [
+          // Production: try multiple possible locations
+          path.join(app.getAppPath(), 'node_modules/@vibetree/core/dist/workers/pty-worker.cjs'),
+          path.join(app.getAppPath(), 'resources', 'pty-worker.cjs'),
+          path.join(__dirname, 'pty-worker.cjs'),
+        ];
+
+    // Try each path with validation
+    for (const workerPath of tryPaths) {
+      const validation = validateWorkerScript(workerPath);
+
+      if (validation.valid) {
+        console.log('[DesktopShellManager] Worker script validated:', validation.resolvedPath);
+        return validation.resolvedPath!;
+      }
+
+      console.warn(
+        `[DesktopShellManager] Worker script validation failed for ${workerPath}:`,
+        validation.error
+      );
     }
+
+    // If all paths fail, throw detailed error
+    throw new Error(
+      `Worker script not found. Tried paths:\n${tryPaths.map((p) => `  - ${p}`).join('\n')}\n` +
+        `Please ensure @vibetree/core is built correctly.`
+    );
   }
 
   /**

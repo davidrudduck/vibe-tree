@@ -1,14 +1,38 @@
 // import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { AuthProvider } from '@vibetree/auth';
+import { ErrorBoundary } from '@vibetree/ui';
 import App from './App';
 import './styles/globals.css';
+
+// Auto-detect server URL based on current page location
+function getServerUrl(): string {
+  const { hostname, protocol } = window.location;
+  return `${protocol}//${hostname}:3002`;
+}
+
+// Global error handlers
+window.addEventListener('error', (e) => {
+  console.error('[Global] Uncaught error:', e.error);
+  e.preventDefault();
+});
+
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('[Global] Unhandled promise rejection:', e.reason);
+});
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   // Temporarily disable StrictMode to fix terminal character duplication
   // <React.StrictMode>
-    <AuthProvider serverUrl="http://localhost:3002">
+  <ErrorBoundary
+    onError={(error, info) => {
+      console.error('[App Crash]', error, info.componentStack);
+      // TODO: When database is available, send error to server for logging
+    }}
+  >
+    <AuthProvider serverUrl={getServerUrl()}>
       <App />
     </AuthProvider>
+  </ErrorBoundary>
   // </React.StrictMode>
 );

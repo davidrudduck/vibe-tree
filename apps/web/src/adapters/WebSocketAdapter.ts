@@ -10,6 +10,12 @@ import type {
   IDE
 } from '@vibetree/core';
 
+export interface WebSocketError extends Error {
+  code: 'TIMEOUT' | 'CONNECTION_LOST' | 'SERVER_ERROR' | 'PARSE_ERROR';
+  retryable: boolean;
+  originalError?: Error;
+}
+
 export class WebSocketAdapter extends BaseAdapter {
   private ws: WebSocket | null = null;
   private messageHandlers: Map<string, (data: any) => void> = new Map();
@@ -79,30 +85,94 @@ export class WebSocketAdapter extends BaseAdapter {
     return this.connectionPromise;
   }
 
-  private async sendMessage<T>(type: string, payload: any): Promise<T> {
+  private createWSError(
+    code: WebSocketError['code'],
+    message: string,
+    retryable = false,
+    originalError?: Error
+  ): WebSocketError {
+    const error = new Error(message) as WebSocketError;
+    error.code = code;
+    error.retryable = retryable;
+    error.originalError = originalError;
+    return error;
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private async sendMessage<T>(
+    type: string,
+    payload: any,
+    options?: { timeout?: number; retries?: number }
+  ): Promise<T> {
+    const timeout = options?.timeout ?? 30000;
+    const maxRetries = options?.retries ?? 2;
+
+    let lastError: WebSocketError | null = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await this._sendMessageOnce<T>(type, payload, timeout);
+      } catch (error) {
+        lastError = error as WebSocketError;
+
+        if (!lastError.retryable || attempt === maxRetries) {
+          throw lastError;
+        }
+
+        console.warn(
+          `[WebSocket] Retrying ${type} (attempt ${attempt + 1}/${maxRetries + 1})`,
+          lastError.message
+        );
+        await this.delay(1000 * (attempt + 1)); // Exponential backoff
+      }
+    }
+
+    throw lastError!;
+  }
+
+  private async _sendMessageOnce<T>(type: string, payload: any, timeout: number): Promise<T> {
     await this.connect();
-    
+
     return new Promise((resolve, reject) => {
+      // Check connection state before sending
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        reject(this.createWSError('CONNECTION_LOST', 'WebSocket not connected', true));
+        return;
+      }
+
       const id = (++this.messageId).toString();
-      
+      let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+
+      const cleanup = () => {
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+        this.messageHandlers.delete(id);
+      };
+
       this.messageHandlers.set(id, (data) => {
+        cleanup();
         if (data.error) {
-          reject(new Error(data.error));
+          reject(this.createWSError('SERVER_ERROR', data.error, false));
         } else {
           resolve(data);
         }
       });
-      
-      const message = { type, payload, id };
-      this.ws!.send(JSON.stringify(message));
-      
-      // Timeout after 30 seconds
-      setTimeout(() => {
-        if (this.messageHandlers.has(id)) {
-          this.messageHandlers.delete(id);
-          reject(new Error('Request timeout'));
-        }
-      }, 30000);
+
+      try {
+        const message = { type, payload, id };
+        this.ws.send(JSON.stringify(message));
+      } catch (error) {
+        cleanup();
+        reject(this.createWSError('CONNECTION_LOST', 'Failed to send message', true, error as Error));
+        return;
+      }
+
+      timeoutHandle = setTimeout(() => {
+        cleanup();
+        reject(this.createWSError('TIMEOUT', `Request ${type} timed out after ${timeout}ms`, true));
+      }, timeout);
     });
   }
 
