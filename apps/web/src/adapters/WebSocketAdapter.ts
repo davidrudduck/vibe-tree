@@ -255,13 +255,159 @@ export class WebSocketAdapter extends BaseAdapter {
   }
 
   async detectIDEs(): Promise<IDE[]> {
-    // Web client doesn't have access to local IDEs
-    return [];
+    // Call server REST API to detect IDEs on server machine
+    try {
+      const response = await fetch(`${this.wsUrl.replace('ws://', 'http://').replace('wss://', 'https://')}/api/ide/list`, {
+        headers: this.jwt ? { 'Authorization': `Bearer ${this.jwt}` } : {}
+      });
+      if (!response.ok) {
+        console.warn('Failed to detect IDEs:', response.statusText);
+        return [];
+      }
+      return await response.json();
+    } catch (error) {
+      console.warn('Failed to detect IDEs:', error);
+      return [];
+    }
   }
 
-  async openInIDE(_ideName: string, _projectPath: string): Promise<{ success: boolean; error?: string }> {
-    // Web client can't open local IDEs
-    return { success: false, error: 'Cannot open IDE from web client' };
+  async openInIDE(ideName: string, projectPath: string): Promise<{ success: boolean; error?: string }> {
+    // Call server REST API to open IDE on server machine
+    try {
+      const response = await fetch(`${this.wsUrl.replace('ws://', 'http://').replace('wss://', 'https://')}/api/ide/open`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.jwt ? { 'Authorization': `Bearer ${this.jwt}` } : {})
+        },
+        body: JSON.stringify({ ideName, path: projectPath })
+      });
+      return await response.json();
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to open IDE'
+      };
+    }
+  }
+
+  // Recent Projects methods
+
+  async getRecentProjects(limit?: number): Promise<any[]> {
+    try {
+      const url = new URL(`${this.wsUrl.replace('ws://', 'http://').replace('wss://', 'https://')}/api/projects/recent`);
+      if (limit) url.searchParams.set('limit', limit.toString());
+
+      const response = await fetch(url.toString(), {
+        headers: this.jwt ? { 'Authorization': `Bearer ${this.jwt}` } : {}
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get recent projects:', error);
+      return [];
+    }
+  }
+
+  async addRecentProject(path: string): Promise<void> {
+    try {
+      const response = await fetch(`${this.wsUrl.replace('ws://', 'http://').replace('wss://', 'https://')}/api/projects/recent`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.jwt ? { 'Authorization': `Bearer ${this.jwt}` } : {})
+        },
+        body: JSON.stringify({ path })
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    } catch (error) {
+      console.error('Failed to add recent project:', error);
+      throw error;
+    }
+  }
+
+  async removeRecentProject(path: string): Promise<void> {
+    try {
+      const response = await fetch(
+        `${this.wsUrl.replace('ws://', 'http://').replace('wss://', 'https://')}/api/projects/recent/${encodeURIComponent(path)}`,
+        {
+          method: 'DELETE',
+          headers: this.jwt ? { 'Authorization': `Bearer ${this.jwt}` } : {}
+        }
+      );
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    } catch (error) {
+      console.error('Failed to remove recent project:', error);
+      throw error;
+    }
+  }
+
+  // Terminal Settings methods
+
+  async getTerminalSettings(): Promise<any> {
+    try {
+      const response = await fetch(`${this.wsUrl.replace('ws://', 'http://').replace('wss://', 'https://')}/api/settings/terminal`, {
+        headers: this.jwt ? { 'Authorization': `Bearer ${this.jwt}` } : {}
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get terminal settings:', error);
+      throw error;
+    }
+  }
+
+  async updateTerminalSettings(settings: any): Promise<any> {
+    try {
+      const response = await fetch(`${this.wsUrl.replace('ws://', 'http://').replace('wss://', 'https://')}/api/settings/terminal`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.jwt ? { 'Authorization': `Bearer ${this.jwt}` } : {})
+        },
+        body: JSON.stringify(settings)
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to update terminal settings:', error);
+      throw error;
+    }
+  }
+
+  // Scheduler History methods
+
+  async getSchedulerHistory(limit?: number): Promise<any[]> {
+    try {
+      const url = new URL(`${this.wsUrl.replace('ws://', 'http://').replace('wss://', 'https://')}/api/scheduler/history`);
+      if (limit) url.searchParams.set('limit', limit.toString());
+
+      const response = await fetch(url.toString(), {
+        headers: this.jwt ? { 'Authorization': `Bearer ${this.jwt}` } : {}
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get scheduler history:', error);
+      return [];
+    }
+  }
+
+  async addSchedulerHistory(entry: { projectId?: string; command: string; delayMs: number; repeat: boolean }): Promise<void> {
+    try {
+      const response = await fetch(`${this.wsUrl.replace('ws://', 'http://').replace('wss://', 'https://')}/api/scheduler/history`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.jwt ? { 'Authorization': `Bearer ${this.jwt}` } : {})
+        },
+        body: JSON.stringify(entry)
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    } catch (error) {
+      console.error('Failed to add scheduler history:', error);
+      throw error;
+    }
   }
 
   async selectDirectory(): Promise<string | undefined> {
