@@ -13,6 +13,7 @@ type AuthAction =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_AUTH_CONFIG'; payload: AuthConfig }
+  | { type: 'SET_AUTH_NOT_REQUIRED'; payload: AuthConfig }
   | { type: 'LOGIN_SUCCESS'; payload: string }
   | { type: 'LOGOUT' }
   | { type: 'CLEAR_ERROR' }
@@ -38,7 +39,18 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
     
     case 'SET_AUTH_CONFIG':
       return { ...state, authConfig: action.payload };
-    
+
+    case 'SET_AUTH_NOT_REQUIRED':
+      // Atomically set config AND authenticate when auth is not required
+      // This prevents race conditions where authConfig is set but isAuthenticated is not
+      return {
+        ...state,
+        authConfig: action.payload,
+        isAuthenticated: true,
+        sessionToken: 'no-auth-required',
+        isLoading: false,
+      };
+
     case 'LOGIN_SUCCESS':
       return {
         ...state,
@@ -85,17 +97,20 @@ export function AuthProvider({ children, serverUrl }: AuthProviderProps) {
   const checkAuthStatus = useCallback(async () => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
-      
+
       // Check server auth configuration
       const authConfig = await authAPI.checkAuthConfig();
-      dispatch({ type: 'SET_AUTH_CONFIG', payload: authConfig });
-      
-      // If auth is not required, consider user authenticated
+
+      // If auth is not required, atomically set config and authenticate
+      // This prevents race conditions in the UI
       if (!authConfig.authRequired) {
-        dispatch({ type: 'LOGIN_SUCCESS', payload: 'no-auth-required' });
+        dispatch({ type: 'SET_AUTH_NOT_REQUIRED', payload: authConfig });
         return;
       }
-      
+
+      // Auth is required - set config and check for existing session
+      dispatch({ type: 'SET_AUTH_CONFIG', payload: authConfig });
+
       // Check for existing session token
       const existingToken = AuthStorage.getSessionToken();
       if (existingToken && AuthStorage.isAuthenticated()) {
@@ -104,12 +119,12 @@ export function AuthProvider({ children, serverUrl }: AuthProviderProps) {
       } else {
         dispatch({ type: 'SET_LOADING', payload: false });
       }
-      
+
     } catch (error) {
       console.error('Failed to check auth status:', error);
-      dispatch({ 
-        type: 'SET_ERROR', 
-        payload: error instanceof AuthError ? error.message : 'Failed to connect to server' 
+      dispatch({
+        type: 'SET_ERROR',
+        payload: error instanceof AuthError ? error.message : 'Failed to connect to server'
       });
     }
   }, [authAPI]);

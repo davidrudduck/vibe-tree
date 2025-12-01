@@ -27,12 +27,20 @@ interface TerminalFork {
 
 export class TerminalForkManager {
   private static instance: TerminalForkManager | null = null;
+  private static defaultWorkerPath: string | null = null;
   private forks: Map<string, TerminalFork> = new Map();
   private terminalIdToSessionId: Map<string, string> = new Map();
   private workerScriptPath: string;
 
   private constructor(workerScriptPath: string) {
     this.workerScriptPath = workerScriptPath;
+  }
+
+  /**
+   * Configure default worker path (call once at app startup)
+   */
+  static setDefaultWorkerPath(path: string): void {
+    TerminalForkManager.defaultWorkerPath = path;
   }
 
   /**
@@ -46,11 +54,32 @@ export class TerminalForkManager {
   }
 
   /**
-   * Get singleton instance
+   * Get singleton instance - safe version that returns null if not initialized
+   */
+  static tryGetInstance(): TerminalForkManager | null {
+    return TerminalForkManager.instance;
+  }
+
+  /**
+   * Check if manager is initialized
+   */
+  static isInitialized(): boolean {
+    return TerminalForkManager.instance !== null;
+  }
+
+  /**
+   * Get singleton instance with auto-initialization fallback
+   * @throws Error only if no default path configured
    */
   static getInstance(): TerminalForkManager {
     if (!TerminalForkManager.instance) {
-      throw new Error('TerminalForkManager not initialized. Call initialize() first.');
+      if (TerminalForkManager.defaultWorkerPath) {
+        console.warn('[TerminalForkManager] Auto-initializing with default worker path');
+        return TerminalForkManager.initialize(TerminalForkManager.defaultWorkerPath);
+      }
+      throw new Error(
+        'TerminalForkManager not initialized. Call initialize() or setDefaultWorkerPath() first.'
+      );
     }
     return TerminalForkManager.instance;
   }

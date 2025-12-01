@@ -1,13 +1,15 @@
 import { Express } from 'express';
 import { ShellManager } from '../services/ShellManager';
 import { AuthService } from '../auth/AuthService';
+import { databaseService } from '../services/DatabaseService';
 import {
   listWorktrees,
   getGitStatus,
   getGitDiff,
   addWorktree,
   removeWorktree,
-  validateProjects
+  validateProjects,
+  IdeService
 } from '@vibetree/core';
 
 interface Services {
@@ -106,8 +108,8 @@ export function setupRestRoutes(app: Express, services: Services) {
   });
 
   // List active shell sessions (protected)
-  app.get('/api/shells', authService.requireAuth, (req, res) => {
-    const sessions = shellManager.getAllSessions();
+  app.get('/api/shells', authService.requireAuth, async (req, res) => {
+    const sessions = await shellManager.getAllSessions();
     res.json(sessions.map(s => ({
       id: s.id,
       worktreePath: s.worktreePath,
@@ -242,6 +244,203 @@ export function setupRestRoutes(app: Express, services: Services) {
         validationResults,
         defaultProjectPath
       });
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Recent Projects endpoints (protected)
+
+  // Get recent projects
+  app.get('/api/projects/recent', authService.requireAuth, (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+      const projects = databaseService.projects.findRecent(limit);
+      res.json(projects);
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Add project to recent
+  app.post('/api/projects/recent', authService.requireAuth, (req, res) => {
+    try {
+      const { path } = req.body;
+
+      if (!path) {
+        return res.status(400).json({ error: 'path is required' });
+      }
+
+      const project = databaseService.projects.updateLastOpened(path);
+      res.json(project);
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Remove project from recent
+  app.delete('/api/projects/recent/:path', authService.requireAuth, (req, res) => {
+    try {
+      const path = decodeURIComponent(req.params.path);
+      databaseService.projects.deleteByPath(path);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Clear all recent projects
+  app.delete('/api/projects/recent', authService.requireAuth, (req, res) => {
+    try {
+      databaseService.projects.clear();
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Toggle favorite status
+  app.patch('/api/projects/:id/favorite', authService.requireAuth, (req, res) => {
+    try {
+      const { id } = req.params;
+      const { isFavorite } = req.body;
+
+      if (typeof isFavorite !== 'boolean') {
+        return res.status(400).json({ error: 'isFavorite must be a boolean' });
+      }
+
+      // Get the project first
+      const projects = databaseService.projects.findRecent();
+      const project = projects.find(p => p.id === id);
+
+      if (!project) {
+        return res.status(404).json({ error: 'Project not found' });
+      }
+
+      // Update it
+      const updated = databaseService.projects.upsert({
+        path: project.path,
+        isFavorite
+      });
+
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Terminal Settings endpoints (protected)
+
+  // Get terminal settings
+  app.get('/api/settings/terminal', authService.requireAuth, (req, res) => {
+    try {
+      const settings = databaseService.settings.getTerminalSettings();
+      res.json(settings);
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Update terminal settings
+  app.put('/api/settings/terminal', authService.requireAuth, (req, res) => {
+    try {
+      const updates = req.body;
+      const settings = databaseService.settings.updateTerminalSettings(updates);
+      res.json(settings);
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Reset terminal settings
+  app.post('/api/settings/terminal/reset', authService.requireAuth, (req, res) => {
+    try {
+      const settings = databaseService.settings.resetTerminalSettings();
+      res.json(settings);
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Scheduler History endpoints (protected)
+
+  // Get scheduler history
+  app.get('/api/scheduler/history', authService.requireAuth, (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+      const history = databaseService.scheduler.findRecent(limit);
+      res.json(history);
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Add to scheduler history
+  app.post('/api/scheduler/history', authService.requireAuth, (req, res) => {
+    try {
+      const { projectId, command, delayMs, repeat } = req.body;
+
+      if (!command) {
+        return res.status(400).json({ error: 'command is required' });
+      }
+
+      if (typeof delayMs !== 'number') {
+        return res.status(400).json({ error: 'delayMs must be a number' });
+      }
+
+      const entry = databaseService.scheduler.create({
+        projectId: projectId || null,
+        command,
+        delayMs,
+        repeat: repeat || false
+      });
+
+      res.json(entry);
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Clear scheduler history
+  app.delete('/api/scheduler/history', authService.requireAuth, (req, res) => {
+    try {
+      databaseService.scheduler.clear();
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // IDE endpoints (protected)
+
+  // Detect installed IDEs
+  app.get('/api/ide/list', authService.requireAuth, async (req, res) => {
+    try {
+      const ideService = IdeService.getInstance();
+      const ides = await ideService.detectIDEs();
+      res.json(ides);
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Open path in IDE
+  app.post('/api/ide/open', authService.requireAuth, async (req, res) => {
+    try {
+      const { ideName, path } = req.body;
+
+      if (!ideName || !path) {
+        return res.status(400).json({ error: 'ideName and path are required' });
+      }
+
+      const ideService = IdeService.getInstance();
+      const result = await ideService.openInIDE(ideName, path);
+
+      if (result.success) {
+        res.json(result);
+      } else {
+        res.status(500).json(result);
+      }
     } catch (error) {
       res.status(500).json({ error: (error as Error).message });
     }

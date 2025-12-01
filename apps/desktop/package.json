@@ -82,6 +82,7 @@
     "@radix-ui/react-tabs": "^1.1.12",
     "@radix-ui/react-toast": "^1.1.5",
     "@vibetree/core": "workspace:*",
+    "@vibetree/database": "workspace:*",
     "@vibetree/ui": "workspace:*",
     "@xterm/addon-clipboard": "^0.2.0-beta.101",
     "@xterm/addon-fit": "^0.11.0-beta.118",

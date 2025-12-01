@@ -8,15 +8,23 @@ import {
   removeWorktree
 } from '@vibetree/core';
 import { terminalSettingsManager } from './terminal-settings';
-import { recentProjectsManager } from './recent-projects';
-import { schedulerHistoryManager } from './scheduler-history';
+import { databaseService } from './database';
 import { createMenu } from './menu';
+import { localServerManager } from './local-server';
 import fs from 'fs';
 import { execSync } from 'child_process';
 import * as os from 'os';
 import * as path from 'path';
 
 export function registerIpcHandlers(mainWindow: BrowserWindow | null) {
+  // Local server URL
+  ipcMain.handle('server:get-url', () => {
+    return {
+      url: localServerManager.getUrl(),
+      wsUrl: localServerManager.getWebSocketUrl()
+    };
+  });
+
   // Git worktree operations
   ipcMain.handle('git:worktree-list', async (_, projectPath: string) => {
     return listWorktrees(projectPath);
@@ -99,47 +107,53 @@ export function registerIpcHandlers(mainWindow: BrowserWindow | null) {
     }
   });
 
-  // Recent projects
+  // Recent projects (using database)
   ipcMain.handle('recent-projects:get', () => {
-    return recentProjectsManager.getRecentProjects();
+    const projects = databaseService.projects.findRecent();
+    // Map to old format for compatibility
+    return projects.map((p: any) => ({
+      path: p.path,
+      name: p.name,
+      lastOpened: p.lastOpened?.getTime() || Date.now(),
+    }));
   });
 
   ipcMain.handle('recent-projects:add', (_, projectPath: string) => {
-    recentProjectsManager.addRecentProject(projectPath);
+    databaseService.projects.updateLastOpened(projectPath);
     // Rebuild menu to reflect the updated recent projects list
     createMenu(mainWindow);
   });
 
   ipcMain.handle('recent-projects:remove', (_, projectPath: string) => {
-    recentProjectsManager.removeRecentProject(projectPath);
+    databaseService.projects.deleteByPath(projectPath);
     // Rebuild menu to reflect the updated recent projects list
     createMenu(mainWindow);
   });
 
   ipcMain.handle('recent-projects:clear', () => {
-    recentProjectsManager.clearRecentProjects();
+    databaseService.projects.clear();
     // Rebuild menu to reflect the updated recent projects list
     createMenu(mainWindow);
   });
 
-  // Terminal settings handlers
+  // Terminal settings handlers (using database)
   ipcMain.handle('terminal-settings:get', () => {
-    return terminalSettingsManager.getSettings();
+    return databaseService.settings.getTerminalSettings();
   });
 
   ipcMain.handle('terminal-settings:update', (_, updates) => {
-    terminalSettingsManager.updateSettings(updates);
+    const updated = databaseService.settings.updateTerminalSettings(updates);
     // Notify all renderer processes about the settings update
     if (mainWindow) {
-      mainWindow.webContents.send('terminal-settings:changed', terminalSettingsManager.getSettings());
+      mainWindow.webContents.send('terminal-settings:changed', updated);
     }
   });
 
   ipcMain.handle('terminal-settings:reset', () => {
-    terminalSettingsManager.resetToDefaults();
+    const reset = databaseService.settings.resetTerminalSettings();
     // Notify all renderer processes about the reset
     if (mainWindow) {
-      mainWindow.webContents.send('terminal-settings:changed', terminalSettingsManager.getSettings());
+      mainWindow.webContents.send('terminal-settings:changed', reset);
     }
   });
 
@@ -147,17 +161,24 @@ export function registerIpcHandlers(mainWindow: BrowserWindow | null) {
     return terminalSettingsManager.getAvailableFonts();
   });
 
-  // Scheduler history handlers
+  // Scheduler history handlers (using database)
   ipcMain.handle('scheduler-history:get', () => {
-    return schedulerHistoryManager.getHistory();
+    const history = databaseService.scheduler.findRecent();
+    // Map to old format for compatibility
+    return history.map((h: any) => ({
+      command: h.command,
+      delayMs: h.delayMs,
+      repeat: h.repeat,
+      timestamp: h.createdAt.getTime(),
+    }));
   });
 
   ipcMain.handle('scheduler-history:add', (_, command: string, delayMs: number, repeat: boolean) => {
-    schedulerHistoryManager.addHistoryEntry(command, delayMs, repeat);
+    databaseService.scheduler.create({ command, delayMs, repeat, projectId: null });
   });
 
   ipcMain.handle('scheduler-history:clear', () => {
-    schedulerHistoryManager.clearHistory();
+    databaseService.scheduler.clear();
   });
 
   // Open external links

@@ -99,19 +99,52 @@ Configure security groups to allow ports 3000 and 3002, then access via `http://
 - Both services must be running (web on random 3XXX port, server on random 3XXX port)
 - Allow firewall connections on both ports if prompted
 
-#### LAN Dev Mode (no pairing)
-When opening from a phone on your Wi‑Fi, the web UI loads over LAN and the web app automatically discovers and connects to the socket server via WebSocket. In development, enable LAN WebSocket access without pairing:
+#### Network Access (Development/Testing)
+
+To access VibeTree from other devices on your local network (phones, tablets, other computers):
+
+**Simple Setup (No Authentication):**
 
 ```bash
-# Allow LAN connections to the WebSocket server in dev (no auth)
-ALLOW_INSECURE_NETWORK=1 HOST=0.0.0.0 pnpm dev:server
+# Terminal 1: Start server with auth disabled and network access
+AUTH_REQUIRED=false HOST=0.0.0.0 pnpm dev:server
+
+# Terminal 2: Start web app
 pnpm dev:web
 ```
 
-Then open the printed Network URL (e.g., http://192.168.1.x:3000) on your phone. If you still see "Not connected", you can explicitly point the web app at the socket server by creating `apps/web/.env`:
+The server will display:
+- **Local URL**: `http://localhost:3003` (or similar port)
+- **Network URL**: `http://192.168.x.x:3003` (accessible from any device on your network)
+- **QR Code**: Scan with your phone to open the web UI
 
-```ini
-VITE_WS_URL=ws://192.168.1.x:XXXX  # Replace XXXX with actual server port
+**What this does:**
+- `AUTH_REQUIRED=false` - Disables authentication (no login required)
+- `HOST=0.0.0.0` - Binds to all network interfaces (allows access from network)
+
+**Access from:**
+- ✅ Web browser on another computer: `http://192.168.x.x:3000`
+- ✅ Phone/tablet on same WiFi: Scan QR code or use network URL
+- ✅ Same machine: `http://localhost:3000`
+
+**With Authentication (Production):**
+
+```bash
+# Terminal 1: Start server with auth enabled
+AUTH_REQUIRED=true USERNAME=admin PASSWORD=secure123 HOST=0.0.0.0 pnpm dev:server
+
+# Terminal 2: Start web app
+pnpm dev:web
+```
+
+Then navigate to the network URL and log in with your credentials.
+
+**Legacy LAN Dev Mode:**
+For older development workflows, use `ALLOW_INSECURE_NETWORK=1`:
+
+```bash
+ALLOW_INSECURE_NETWORK=1 HOST=0.0.0.0 pnpm dev:server
+pnpm dev:web
 ```
 
 ### Environment Variables

@@ -1,8 +1,11 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 const api = {
+  server: {
+    getUrl: () => ipcRenderer.invoke('server:get-url'),
+  },
   git: {
-    listWorktrees: (projectPath: string) => 
+    listWorktrees: (projectPath: string) =>
       ipcRenderer.invoke('git:worktree-list', projectPath),
     addWorktree: (projectPath: string, branchName: string) => 
       ipcRenderer.invoke('git:worktree-add', projectPath, branchName),
