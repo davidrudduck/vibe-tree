@@ -8,7 +8,8 @@ import './styles/globals.css';
 // Auto-detect server URL based on current page location
 function getServerUrl(): string {
   const { hostname, protocol } = window.location;
-  return `${protocol}//${hostname}:3002`;
+  const serverPort = import.meta.env.VITE_SERVER_PORT || '3002';
+  return `${protocol}//${hostname}:${serverPort}`;
 }
 
 // Global error handlers

@@ -1,8 +1,12 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import fs from 'fs';
 import path from 'path';
+import dotenv from 'dotenv';
+
+// Load .env file
+dotenv.config();
 
 // Plugin to capture the actual port Vite uses
 function portCapturePlugin() {
@@ -50,8 +54,8 @@ export default defineConfig({
     })
   ],
   server: {
-    port: 3000,
-    host: '0.0.0.0', // Bind to all network interfaces for network access
+    port: parseInt(process.env.PORT || '3000', 10),
+    host: process.env.HOST || '0.0.0.0',
     strictPort: false, // Allow Vite to find alternative ports
     // Note: Proxy configuration removed - apps will connect directly using environment variables
   }
