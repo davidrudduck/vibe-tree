@@ -134,10 +134,18 @@ class DesktopShellManager {
             this.broadcastSessionChange();
           });
 
+        // Add exit listener
+        this.sessionManager!.addExitListener(processId, listenerId, (exitCode: number) => {
+          this.safeSend(event.sender, `shell:exit:${processId}`, exitCode);
+          // Broadcast session change when terminal exits
+          this.broadcastSessionChange();
+        });
+
+        if (result.isNew) {
           // Broadcast session change for new terminal
           this.broadcastSessionChange();
         } else {
-          console.log(`[DesktopShellManager] Reusing session ${processId}, skipping listener setup`);
+          console.log(`[DesktopShellManager] Reconnected to existing session ${processId}`);
         }
       }
 

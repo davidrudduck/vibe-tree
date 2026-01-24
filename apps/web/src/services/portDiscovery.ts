@@ -5,7 +5,11 @@
 let cachedServerPort: number | null = null;
 
 /**
- * Attempts to discover the server port by checking common ports
+ * Discover the server port to use, honoring a cached value and an optional environment override, and probing common ports when needed.
+ *
+ * If `VITE_SERVER_PORT` is set and parses to an integer in the range 1–65535, that value is cached and returned. Otherwise the function probes ports 3002 through 3051 on the current host by requesting `/health` with a 500ms timeout and caches the first port that responds successfully. If no port responds, the function returns the fallback port 3002.
+ *
+ * @returns The discovered or cached server port number; falls back to 3002 when discovery fails.
  */
 async function discoverServerPort(): Promise<number> {
   if (cachedServerPort) {
