@@ -9,10 +9,13 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 /**
- * Parse and validate a port number from environment variable.
+ * Resolve a valid TCP port number from an environment string or fall back to a default.
+ *
+ * Logs a warning and returns the provided default if the value is missing, non-numeric, or outside the range 1–65535.
+ *
  * @param envValue - The environment variable value to parse
  * @param defaultPort - Default port to use if validation fails
- * @returns A valid port number
+ * @returns The parsed port when it is between 1 and 65535, otherwise `defaultPort`
  */
 function parsePort(envValue: string | undefined, defaultPort: number): number {
   if (!envValue) return defaultPort;
@@ -25,9 +28,11 @@ function parsePort(envValue: string | undefined, defaultPort: number): number {
 }
 
 /**
- * Vite plugin to capture and save the actual port the server uses.
- * Writes the port number to .web-port file for other processes to discover.
- * @returns Vite plugin configuration object
+ * Create a Vite plugin that captures the server's actual listening port.
+ *
+ * When the dev server starts, writes the resolved port number to a file named `.web-port` so external processes can discover it.
+ *
+ * @returns The Vite plugin configuration object
  */
 function portCapturePlugin() {
   return {
