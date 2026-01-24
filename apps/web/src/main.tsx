@@ -5,7 +5,11 @@ import { ErrorBoundary } from '@vibetree/ui';
 import App from './App';
 import './styles/globals.css';
 
-// Auto-detect server URL based on current page location
+/**
+ * Auto-detect server URL based on current page location.
+ * Uses VITE_SERVER_PORT environment variable or defaults to port 3002.
+ * @returns The full server URL including protocol, hostname, and port
+ */
 function getServerUrl(): string {
   const { hostname, protocol } = window.location;
   const serverPort = import.meta.env.VITE_SERVER_PORT || '3002';

@@ -8,7 +8,11 @@ import dotenv from 'dotenv';
 // Load .env file
 dotenv.config();
 
-// Plugin to capture the actual port Vite uses
+/**
+ * Vite plugin to capture and save the actual port the server uses.
+ * Writes the port number to .web-port file for other processes to discover.
+ * @returns Vite plugin configuration object
+ */
 function portCapturePlugin() {
   return {
     name: 'port-capture',
