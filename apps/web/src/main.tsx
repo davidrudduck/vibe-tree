@@ -6,9 +6,9 @@ import App from './App';
 import './styles/globals.css';
 
 /**
- * Auto-detect server URL based on current page location.
- * Uses VITE_SERVER_PORT environment variable or defaults to port 3002.
- * @returns The full server URL including protocol, hostname, and port
+ * Determine the full server URL for API/auth calls from the current page location and VITE_SERVER_PORT.
+ *
+ * @returns The URL composed of the page protocol, hostname, and port (the validated `VITE_SERVER_PORT` value if between 1 and 65535, otherwise `3002`)
  */
 function getServerUrl(): string {
   const { hostname, protocol } = window.location;

@@ -17,6 +17,16 @@ interface Services {
   authService: AuthService;
 }
 
+/**
+ * Registers the application's REST HTTP routes on the provided Express app.
+ *
+ * This mounts endpoints for configuration, authentication (login/logout/QR/device management),
+ * shell session management, Git operations, project validation and recent-projects management,
+ * terminal settings, scheduler history, and IDE detection/opening.
+ *
+ * @param app - The Express application on which to register the routes
+ * @param services - Service bundle providing `shellManager` and `authService` used by the routes
+ */
 export function setupRestRoutes(app: Express, services: Services) {
   const { shellManager, authService } = services;
   
