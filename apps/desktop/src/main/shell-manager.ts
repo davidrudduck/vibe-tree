@@ -101,30 +101,30 @@ class DesktopShellManager {
       if (result.success && result.processId) {
         const processId = result.processId;
 
-        // Only add listeners for new sessions
+        // Generate unique listener ID for this connection
+        // Always add listeners - each renderer connection needs its own listener
+        const listenerId = `renderer-${Date.now()}-${Math.random()}`;
+
+        // Add output listener (will replay buffer for existing sessions)
+        this.sessionManager!.addOutputListener(processId, listenerId, (data: string) => {
+          if (!this.safeSend(event.sender, `shell:output:${processId}`, data)) {
+            // Frame was disposed - remove this listener
+            this.sessionManager!.removeOutputListener(processId, listenerId);
+          }
+        });
+
+        // Add exit listener
+        this.sessionManager!.addExitListener(processId, listenerId, (exitCode: number) => {
+          this.safeSend(event.sender, `shell:exit:${processId}`, exitCode);
+          // Broadcast session change when terminal exits
+          this.broadcastSessionChange();
+        });
+
         if (result.isNew) {
-          // Generate unique listener ID for this connection
-          const listenerId = `renderer-${Date.now()}-${Math.random()}`;
-
-          // Add output listener
-          this.sessionManager!.addOutputListener(processId, listenerId, (data: string) => {
-            if (!this.safeSend(event.sender, `shell:output:${processId}`, data)) {
-              // Frame was disposed - remove this listener
-              this.sessionManager!.removeOutputListener(processId, listenerId);
-            }
-          });
-
-          // Add exit listener
-          this.sessionManager!.addExitListener(processId, listenerId, (exitCode: number) => {
-            this.safeSend(event.sender, `shell:exit:${processId}`, exitCode);
-            // Broadcast session change when terminal exits
-            this.broadcastSessionChange();
-          });
-
           // Broadcast session change for new terminal
           this.broadcastSessionChange();
         } else {
-          console.log(`[DesktopShellManager] Reusing session ${processId}, skipping listener setup`);
+          console.log(`[DesktopShellManager] Reconnected to existing session ${processId}`);
         }
       }
 
