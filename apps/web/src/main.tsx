@@ -12,7 +12,14 @@ import './styles/globals.css';
  */
 function getServerUrl(): string {
   const { hostname, protocol } = window.location;
-  const serverPort = import.meta.env.VITE_SERVER_PORT || '3002';
+  const envPort = import.meta.env.VITE_SERVER_PORT;
+  let serverPort = 3002;
+  if (envPort) {
+    const parsed = parseInt(envPort, 10);
+    if (!isNaN(parsed) && parsed >= 1 && parsed <= 65535) {
+      serverPort = parsed;
+    }
+  }
   return `${protocol}//${hostname}:${serverPort}`;
 }
 

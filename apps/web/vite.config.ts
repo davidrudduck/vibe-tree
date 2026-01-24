@@ -9,6 +9,22 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 /**
+ * Parse and validate a port number from environment variable.
+ * @param envValue - The environment variable value to parse
+ * @param defaultPort - Default port to use if validation fails
+ * @returns A valid port number
+ */
+function parsePort(envValue: string | undefined, defaultPort: number): number {
+  if (!envValue) return defaultPort;
+  const parsed = parseInt(envValue, 10);
+  if (isNaN(parsed) || parsed < 1 || parsed > 65535) {
+    console.warn(`⚠️ Invalid PORT value: ${envValue}, using default ${defaultPort}`);
+    return defaultPort;
+  }
+  return parsed;
+}
+
+/**
  * Vite plugin to capture and save the actual port the server uses.
  * Writes the port number to .web-port file for other processes to discover.
  * @returns Vite plugin configuration object
@@ -58,7 +74,7 @@ export default defineConfig({
     })
   ],
   server: {
-    port: parseInt(process.env.PORT || '3000', 10),
+    port: parsePort(process.env.PORT, 3000),
     host: process.env.HOST || '0.0.0.0',
     strictPort: false, // Allow Vite to find alternative ports
     // Note: Proxy configuration removed - apps will connect directly using environment variables
