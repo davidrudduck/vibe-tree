@@ -5,6 +5,8 @@ import { shellProcessManager } from './shell-manager';
 import { terminalSettingsManager } from './terminal-settings';
 import { databaseService } from './database';
 import { localServerManager } from './local-server';
+import { notificationSettingsManager } from './notification-settings';
+import { notificationManager } from './notification-manager';
 import './ide-detector';
 import { registerIpcHandlers } from './ipc-handlers';
 import { createMenu } from './menu';
@@ -86,11 +88,15 @@ app.whenReady().then(async () => {
 
   // Initialize terminal settings and shell manager BEFORE creating window
   terminalSettingsManager.initialize();
+  notificationSettingsManager.initialize();
   await shellProcessManager.initialize();
 
   createWindow();
   createMenu(mainWindow);
   registerIpcHandlers(mainWindow);
+
+  // Initialize notification manager with main window
+  notificationManager.initialize(mainWindow);
 
   // Initialize quit manager with cleanup callback
   quitManager.initialize(mainWindow);
