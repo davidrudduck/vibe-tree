@@ -311,7 +311,7 @@ export function setupRestRoutes(app: Express, services: Services) {
 
       // Get the project first
       const projects = databaseService.projects.findRecent();
-      const project = projects.find(p => p.id === id);
+      const project = projects.find((p: { id: string }) => p.id === id);
 
       if (!project) {
         return res.status(404).json({ error: 'Project not found' });

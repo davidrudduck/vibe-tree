@@ -12,6 +12,19 @@ async function discoverServerPort(): Promise<number> {
     return cachedServerPort;
   }
 
+  // Check environment variable first
+  const envPort = import.meta.env.VITE_SERVER_PORT;
+  if (envPort) {
+    const port = parseInt(envPort, 10);
+    if (isNaN(port) || port < 1 || port > 65535) {
+      console.warn(`⚠️ Invalid VITE_SERVER_PORT value: ${envPort}, falling back to discovery`);
+    } else {
+      console.log(`📝 Using environment server port: ${port}`);
+      cachedServerPort = port;
+      return port;
+    }
+  }
+
   // Use current hostname for discovery (supports network access)
   const hostname = window.location.hostname;
   const protocol = window.location.protocol;
@@ -37,16 +50,9 @@ async function discoverServerPort(): Promise<number> {
     }
   }
 
-  // If discovery fails, fall back to environment variable or default
-  const envPort = import.meta.env.VITE_SERVER_PORT;
-  if (envPort) {
-    const port = parseInt(envPort);
-    console.log(`📝 Using environment server port: ${port}`);
-    return port;
-  }
-
-  console.warn('⚠️ Could not discover server port, using fallback 8000');
-  return 8000;
+  // If discovery fails, use default port
+  console.warn('⚠️ Could not discover server port, using fallback 3002');
+  return 3002;
 }
 
 /**
