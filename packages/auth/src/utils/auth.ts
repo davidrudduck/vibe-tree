@@ -14,19 +14,11 @@ export class AuthAPI {
   }
 
   private detectServerUrl(): string {
-    // Try common development server ports
-    const commonPorts = ['3002', '3001', '8080'];
     const protocol = window.location.protocol;
     const hostname = window.location.hostname;
-    
-    // If we're on localhost, try development server ports
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      // Default to port 3002 (server default)
-      return `${protocol}//${hostname}:3002`;
-    }
-    
-    // For production or other environments, use current origin
-    return window.location.origin;
+
+    // Default to port 3002 on the same hostname the page was loaded from
+    return `${protocol}//${hostname}:3002`;
   }
 
   async checkAuthConfig(): Promise<AuthConfig> {
