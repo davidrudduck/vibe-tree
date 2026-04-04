@@ -246,6 +246,15 @@ export class WebSocketAdapter extends BaseAdapter {
     return result.diff;
   }
 
+  async getAheadBehind(worktreePath: string, baseBranch?: string): Promise<{ ahead: number; behind: number }> {
+    return this.sendMessage('git:ahead-behind', { worktreePath, baseBranch });
+  }
+
+  async getDiffVsMain(worktreePath: string, baseBranch?: string): Promise<string> {
+    const result = await this.sendMessage<{ diff: string }>('git:diff-vs-main', { worktreePath, baseBranch });
+    return result.diff;
+  }
+
   async addWorktree(projectPath: string, branchName: string): Promise<WorktreeAddResult> {
     return this.sendMessage('git:worktree:add', { projectPath, branchName });
   }
@@ -371,6 +380,39 @@ export class WebSocketAdapter extends BaseAdapter {
       return await response.json();
     } catch (error) {
       console.error('Failed to update terminal settings:', error);
+      throw error;
+    }
+  }
+
+  // Worktree Base Path methods
+
+  async getWorktreeBasePath(): Promise<string | null> {
+    try {
+      const response = await fetch(`${this.wsUrl.replace('ws://', 'http://').replace('wss://', 'https://')}/api/settings/worktree-base-path`, {
+        headers: this.jwt ? { 'Authorization': `Bearer ${this.jwt}` } : {}
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      return data.path;
+    } catch (error) {
+      console.error('Failed to get worktree base path:', error);
+      throw error;
+    }
+  }
+
+  async setWorktreeBasePath(path: string): Promise<void> {
+    try {
+      const response = await fetch(`${this.wsUrl.replace('ws://', 'http://').replace('wss://', 'https://')}/api/settings/worktree-base-path`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.jwt ? { 'Authorization': `Bearer ${this.jwt}` } : {})
+        },
+        body: JSON.stringify({ path })
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    } catch (error) {
+      console.error('Failed to set worktree base path:', error);
       throw error;
     }
   }
