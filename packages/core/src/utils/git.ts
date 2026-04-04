@@ -96,8 +96,10 @@ export async function getGitDiffStaged(worktreePath: string, filePath?: string):
  * @param branchName - Name for the new branch
  * @returns Result with new worktree path and branch name
  */
-export async function addWorktree(projectPath: string, branchName: string): Promise<WorktreeAddResult> {
-  const worktreePath = path.join(projectPath, '..', `${path.basename(projectPath)}-${branchName}`);
+export async function addWorktree(projectPath: string, branchName: string, basePath?: string): Promise<WorktreeAddResult> {
+  const worktreePath = basePath
+    ? path.join(basePath, `${path.basename(projectPath)}-${branchName}`)
+    : path.join(projectPath, '..', `${path.basename(projectPath)}-${branchName}`);
   
   await executeGitCommand(['worktree', 'add', '-b', branchName, worktreePath], projectPath);
   
@@ -112,24 +114,41 @@ export async function addWorktree(projectPath: string, branchName: string): Prom
  * @returns Result indicating success and any warnings
  */
 export async function removeWorktree(
-  projectPath: string, 
-  worktreePath: string, 
-  branchName: string
+  projectPath: string,
+  worktreePath: string,
+  branchName: string,
+  force: boolean = false
 ): Promise<WorktreeRemoveResult> {
+  // Check for uncommitted changes before removing
+  if (!force) {
+    try {
+      const status = await getGitStatus(worktreePath);
+      if (status.length > 0) {
+        return {
+          success: false,
+          warning: `Worktree has ${status.length} uncommitted change(s). Use force to remove anyway.`
+        };
+      }
+    } catch {
+      // If status check fails, proceed with removal
+    }
+  }
+
   try {
-    // First remove the worktree
-    await executeGitCommand(['worktree', 'remove', worktreePath, '--force'], projectPath);
-    
+    // Remove the worktree (use --force only when explicitly requested)
+    const removeArgs = ['worktree', 'remove', worktreePath];
+    if (force) removeArgs.push('--force');
+    await executeGitCommand(removeArgs, projectPath);
+
     try {
       // Then try to delete the branch
       await executeGitCommand(['branch', '-D', branchName], projectPath);
       return { success: true };
     } catch (branchError) {
-      // If branch deletion fails, still consider it success since worktree was removed
       console.warn('Failed to delete branch but worktree was removed:', branchError);
-      return { 
-        success: true, 
-        warning: `Worktree removed but failed to delete branch: ${branchError}` 
+      return {
+        success: true,
+        warning: `Worktree removed but failed to delete branch: ${branchError}`
       };
     }
   } catch (error) {
@@ -159,6 +178,99 @@ export async function isGitRepository(path: string): Promise<boolean> {
 export async function getCurrentBranch(worktreePath: string): Promise<string> {
   const output = await executeGitCommand(['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath);
   return output.trim();
+}
+
+/**
+ * Get the main branch name for a repository
+ * @param projectPath - Path to the git repository
+ * @returns The detected main branch name ('main', 'master', or first available)
+ */
+export async function getMainBranchName(projectPath: string): Promise<string> {
+  // Try symbolic-ref for origin/HEAD first
+  try {
+    const output = await executeGitCommand(['symbolic-ref', 'refs/remotes/origin/HEAD'], projectPath);
+    const ref = output.trim();
+    // refs/remotes/origin/main -> main
+    const match = ref.match(/^refs\/remotes\/origin\/(.+)$/);
+    if (match) {
+      return match[1];
+    }
+  } catch {
+    // Fall through to branch existence checks
+  }
+
+  // Try 'main' then 'master'
+  for (const candidate of ['main', 'master']) {
+    try {
+      await executeGitCommand(['rev-parse', '--verify', candidate], projectPath);
+      return candidate;
+    } catch {
+      // Not found, try next
+    }
+  }
+
+  // Fall back to the first branch listed
+  try {
+    const output = await executeGitCommand(['branch', '--format=%(refname:short)'], projectPath);
+    const first = output.trim().split('\n')[0];
+    if (first) {
+      return first;
+    }
+  } catch {
+    // Ignore
+  }
+
+  return 'main';
+}
+
+/**
+ * Get ahead/behind commit counts relative to a base branch
+ * @param worktreePath - Path to the git worktree
+ * @param baseBranch - Base branch to compare against (default: 'main')
+ * @returns Object with ahead and behind counts
+ */
+export async function getAheadBehind(
+  worktreePath: string,
+  baseBranch: string = 'main'
+): Promise<{ ahead: number; behind: number }> {
+  try {
+    const output = await executeGitCommand(
+      ['rev-list', '--left-right', '--count', `${baseBranch}...HEAD`],
+      worktreePath
+    );
+    // Output format: "behind\tahead" (left is baseBranch, right is HEAD)
+    const parts = output.trim().split('\t');
+    if (parts.length === 2) {
+      const behind = parseInt(parts[0], 10);
+      const ahead = parseInt(parts[1], 10);
+      return {
+        ahead: isNaN(ahead) ? 0 : ahead,
+        behind: isNaN(behind) ? 0 : behind
+      };
+    }
+    return { ahead: 0, behind: 0 };
+  } catch {
+    // Base branch doesn't exist or other error
+    return { ahead: 0, behind: 0 };
+  }
+}
+
+/**
+ * Get diff of current branch vs a base branch
+ * @param worktreePath - Path to the git worktree
+ * @param baseBranch - Base branch to compare against (default: 'main')
+ * @returns Diff output as string
+ */
+export async function getDiffVsMain(
+  worktreePath: string,
+  baseBranch: string = 'main'
+): Promise<string> {
+  try {
+    return await executeGitCommand(['diff', `${baseBranch}...HEAD`], worktreePath);
+  } catch {
+    // Base branch doesn't exist or other error
+    return '';
+  }
 }
 
 /**
