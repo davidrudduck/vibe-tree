@@ -91,18 +91,48 @@ export async function getGitDiffStaged(worktreePath: string, filePath?: string):
 }
 
 /**
+ * List all branches in a git repository
+ * @param projectPath - Path to the git repository
+ * @returns Array of branch information
+ */
+export async function listBranches(projectPath: string): Promise<{ name: string; current: boolean; remote: boolean }[]> {
+  const output = await executeGitCommand(['branch', '-a', '--format=%(refname:short)|%(HEAD)'], projectPath);
+  const lines = output.trim().split('\n').filter(line => line.trim());
+  const results: { name: string; current: boolean; remote: boolean }[] = [];
+
+  for (const line of lines) {
+    const [name, head] = line.split('|');
+    if (!name) continue;
+    // Filter out HEAD -> origin/main style entries
+    if (name.includes('HEAD')) continue;
+    const remote = name.startsWith('origin/') || name.includes('remotes/');
+    results.push({
+      name: name.trim(),
+      current: head === '*',
+      remote
+    });
+  }
+
+  return results;
+}
+
+/**
  * Create a new git worktree with a new branch
  * @param projectPath - Path to the main git repository
  * @param branchName - Name for the new branch
+ * @param basePath - Optional base directory for the worktree
+ * @param startPoint - Optional base branch/commit to create the new branch from
  * @returns Result with new worktree path and branch name
  */
-export async function addWorktree(projectPath: string, branchName: string, basePath?: string): Promise<WorktreeAddResult> {
+export async function addWorktree(projectPath: string, branchName: string, basePath?: string, startPoint?: string): Promise<WorktreeAddResult> {
   const worktreePath = basePath
     ? path.join(basePath, `${path.basename(projectPath)}-${branchName}`)
     : path.join(projectPath, '..', `${path.basename(projectPath)}-${branchName}`);
-  
-  await executeGitCommand(['worktree', 'add', '-b', branchName, worktreePath], projectPath);
-  
+
+  const args = ['worktree', 'add', '-b', branchName, worktreePath];
+  if (startPoint) args.push(startPoint);
+  await executeGitCommand(args, projectPath);
+
   return { path: worktreePath, branch: branchName };
 }
 
@@ -271,6 +301,41 @@ export async function getDiffVsMain(
     // Base branch doesn't exist or other error
     return '';
   }
+}
+
+/**
+ * Get the remote URL for a git repository
+ * @param projectPath - Path to the git repository
+ * @returns The remote URL or null if not configured
+ */
+export async function getRemoteUrl(projectPath: string): Promise<string | null> {
+  try {
+    const output = await executeGitCommand(['remote', 'get-url', 'origin'], projectPath);
+    return output.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parse a GitHub remote URL into owner and repo components
+ * @param remoteUrl - The git remote URL (HTTPS or SSH)
+ * @returns Object with owner and repo, or null if not a GitHub URL
+ */
+export async function parseGitHubRepo(remoteUrl: string): Promise<{ owner: string; repo: string } | null> {
+  // HTTPS: https://github.com/owner/repo.git or https://github.com/owner/repo
+  const httpsMatch = remoteUrl.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/);
+  if (httpsMatch) {
+    return { owner: httpsMatch[1], repo: httpsMatch[2] };
+  }
+
+  // SSH: git@github.com:owner/repo.git or git@github.com:owner/repo
+  const sshMatch = remoteUrl.match(/^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/);
+  if (sshMatch) {
+    return { owner: sshMatch[1], repo: sshMatch[2] };
+  }
+
+  return null;
 }
 
 /**

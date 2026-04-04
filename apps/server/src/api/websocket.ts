@@ -4,6 +4,7 @@ import { AuthService } from '../auth/AuthService';
 import { databaseService } from '../services/DatabaseService';
 import {
   listWorktrees,
+  listBranches,
   getGitStatus,
   getGitDiff,
   getGitDiffStaged,
@@ -311,13 +312,32 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
             break;
           }
 
+          case 'git:branches': {
+            try {
+              const branches = await listBranches(message.payload.projectPath);
+              ws.send(JSON.stringify({
+                type: 'git:branches:response',
+                payload: { branches },
+                id: message.id
+              }));
+            } catch (error) {
+              ws.send(JSON.stringify({
+                type: 'error',
+                payload: { error: (error as Error).message },
+                id: message.id
+              }));
+            }
+            break;
+          }
+
           case 'git:worktree:add': {
             try {
               const worktreeBasePath = databaseService.settings.get<string>('general', 'worktreeBasePath') ?? undefined;
               const result = await addWorktree(
                 message.payload.projectPath,
                 message.payload.branchName,
-                worktreeBasePath
+                worktreeBasePath,
+                message.payload.startPoint
               );
               ws.send(JSON.stringify({
                 type: 'git:worktree:add:response',

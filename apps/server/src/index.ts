@@ -96,6 +96,10 @@ Possible solutions:
 
   // Initialize database
   databaseService.initialize();
+  const pruned = databaseService.projects.pruneStale();
+  if (pruned > 0) {
+    console.log(`[Database] Pruned ${pruned} stale project(s)`);
+  }
 
   // Setup REST routes
   setupRestRoutes(app, { shellManager, authService });

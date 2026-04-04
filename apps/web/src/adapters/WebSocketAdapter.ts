@@ -255,8 +255,13 @@ export class WebSocketAdapter extends BaseAdapter {
     return result.diff;
   }
 
-  async addWorktree(projectPath: string, branchName: string): Promise<WorktreeAddResult> {
-    return this.sendMessage('git:worktree:add', { projectPath, branchName });
+  async getBranches(projectPath: string): Promise<{ name: string; current: boolean; remote: boolean }[]> {
+    const result = await this.sendMessage<{ branches: { name: string; current: boolean; remote: boolean }[] }>('git:branches', { projectPath });
+    return result.branches;
+  }
+
+  async addWorktree(projectPath: string, branchName: string, startPoint?: string): Promise<WorktreeAddResult> {
+    return this.sendMessage('git:worktree:add', { projectPath, branchName, startPoint });
   }
 
   async removeWorktree(projectPath: string, worktreePath: string, branchName: string): Promise<WorktreeRemoveResult> {

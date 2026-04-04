@@ -223,10 +223,19 @@ export function setupRestRoutes(app: Express, services: Services) {
         if (recentProjects.length > 0) {
           const recentPaths = recentProjects.map((p: any) => p.path);
           const validationResults = await validateProjects(recentPaths);
-          const defaultProjectPath = validationResults.find(result => result.valid)?.path || null;
+
+          // Remove invalid projects from the database
+          for (const result of validationResults) {
+            if (!result.valid) {
+              databaseService.projects.deleteByPath(result.path);
+            }
+          }
+
+          const validPaths = validationResults.filter(result => result.valid).map(result => result.path);
+          const defaultProjectPath = validPaths[0] || null;
           return res.json({
-            projectPaths: recentPaths,
-            validationResults,
+            projectPaths: validPaths,
+            validationResults: validationResults.filter(result => result.valid),
             defaultProjectPath
           });
         }
@@ -453,6 +462,65 @@ export function setupRestRoutes(app: Express, services: Services) {
 
       databaseService.settings.set('general', 'worktreeBasePath', basePath);
       res.json({ path: basePath });
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Prune stale projects (protected)
+  app.post('/api/projects/prune', authService.requireAuth, (req, res) => {
+    try {
+      const pruned = databaseService.projects.pruneStale();
+      res.json({ pruned });
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // GitHub PR endpoints (protected)
+
+  // Get open PRs for a project's GitHub repo
+  app.get('/api/projects/:projectPath/pulls', authService.requireAuth, async (req, res) => {
+    try {
+      const { getRemoteUrl, parseGitHubRepo } = await import('@vibetree/core');
+      const { GitHubService } = await import('../services/GitHubService');
+      const projectPath = decodeURIComponent(req.params.projectPath);
+      const remoteUrl = await getRemoteUrl(projectPath);
+      if (!remoteUrl) return res.json([]);
+      const repo = await parseGitHubRepo(remoteUrl);
+      if (!repo) return res.json([]);
+      const pulls = await GitHubService.getInstance().getPullRequests(repo.owner, repo.repo);
+      res.json(pulls);
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Get PR for a specific branch
+  app.get('/api/projects/:projectPath/pulls/:branch', authService.requireAuth, async (req, res) => {
+    try {
+      const { getRemoteUrl, parseGitHubRepo } = await import('@vibetree/core');
+      const { GitHubService } = await import('../services/GitHubService');
+      const projectPath = decodeURIComponent(req.params.projectPath);
+      const branch = req.params.branch;
+      const remoteUrl = await getRemoteUrl(projectPath);
+      if (!remoteUrl) return res.json(null);
+      const repo = await parseGitHubRepo(remoteUrl);
+      if (!repo) return res.json(null);
+      const pull = await GitHubService.getInstance().getPullRequestForBranch(repo.owner, repo.repo, branch);
+      res.json(pull);
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Get GitHub token/rate-limit status
+  app.get('/api/github/status', authService.requireAuth, async (req, res) => {
+    try {
+      const { GitHubService } = await import('../services/GitHubService');
+      const svc = GitHubService.getInstance();
+      const rateLimit = await svc.getRateLimit();
+      res.json({ configured: svc.isConfigured(), rateLimit });
     } catch (error) {
       res.status(500).json({ error: (error as Error).message });
     }
