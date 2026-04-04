@@ -19,6 +19,7 @@ release/
 *.pem
 .dev-port
 .web-port
+.server-port
 
 # Debug
 npm-debug.log*

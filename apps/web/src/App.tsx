@@ -10,6 +10,7 @@ import { useAppStore } from './store';
 import { useWebSocket } from './hooks/useWebSocket';
 import { Sun, Moon, Plus, X, Terminal, GitBranch, CheckCircle } from 'lucide-react';
 import { autoLoadProjects } from './services/projectValidation';
+import { getServerHttpUrl } from './services/portDiscovery';
 
 function App() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -108,9 +109,21 @@ function App() {
     localStorage.setItem('theme', newTheme);
   };
 
-  const handleSelectProject = (path: string) => {
+  const handleSelectProject = async (path: string) => {
     addProject(path);
     setShowProjectSelector(false);
+
+    // Persist to database for next session
+    try {
+      const httpUrl = await getServerHttpUrl();
+      await fetch(`${httpUrl}/api/projects/recent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      });
+    } catch {
+      // Non-critical — project is already loaded in memory
+    }
   };
 
   const handleCloseProject = (e: React.MouseEvent, projectId: string) => {

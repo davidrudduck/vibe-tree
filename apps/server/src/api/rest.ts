@@ -218,10 +218,22 @@ export function setupRestRoutes(app: Express, services: Services) {
       const defaultProjectsEnv = process.env.DEFAULT_PROJECTS;
       
       if (!defaultProjectsEnv || defaultProjectsEnv.trim() === '') {
-        return res.json({ 
-          projectPaths: [], 
-          validationResults: [], 
-          defaultProjectPath: null 
+        // No env var configured — fall back to recent projects from database
+        const recentProjects = databaseService.projects.findRecent(10);
+        if (recentProjects.length > 0) {
+          const recentPaths = recentProjects.map((p: any) => p.path);
+          const validationResults = await validateProjects(recentPaths);
+          const defaultProjectPath = validationResults.find(result => result.valid)?.path || null;
+          return res.json({
+            projectPaths: recentPaths,
+            validationResults,
+            defaultProjectPath
+          });
+        }
+        return res.json({
+          projectPaths: [],
+          validationResults: [],
+          defaultProjectPath: null
         });
       }
       

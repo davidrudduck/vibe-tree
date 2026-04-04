@@ -128,8 +128,16 @@ Possible solutions:
 
   // Start server
   server.listen(parseInt(PORT.toString()), HOST, async () => {
+    // Write server port to file so the frontend can discover it without scanning
+    try {
+      const serverPortFile = path.join(__dirname, '../../../apps/web/.server-port');
+      fs.writeFileSync(serverPortFile, PORT.toString());
+    } catch (error) {
+      console.warn('Could not write .server-port file');
+    }
+
     const socketUrls = getNetworkUrls(PORT, HOST);
-    
+
     // Try to read web port from file, fallback to 3000
     let webPort = 3000;
     try {
