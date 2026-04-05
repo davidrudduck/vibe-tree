@@ -99,7 +99,7 @@ export class GitHubService {
   async getPullRequests(owner: string, repo: string): Promise<PullRequest[]> {
     try {
       const url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls?state=open&per_page=100`;
-      const response = await fetch(url, { headers: this.buildHeaders() });
+      const response = await fetch(url, { headers: this.buildHeaders(), signal: AbortSignal.timeout(10_000) });
 
       if (!response.ok) {
         console.warn(`GitHub API error fetching PRs: ${response.status} ${response.statusText}`);
@@ -117,7 +117,7 @@ export class GitHubService {
   async getPullRequestForBranch(owner: string, repo: string, branch: string): Promise<PullRequest | null> {
     try {
       const url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls?head=${encodeURIComponent(owner)}:${encodeURIComponent(branch)}&state=open&per_page=10`;
-      const response = await fetch(url, { headers: this.buildHeaders() });
+      const response = await fetch(url, { headers: this.buildHeaders(), signal: AbortSignal.timeout(10_000) });
 
       if (!response.ok) {
         console.warn(`GitHub API error fetching PR for branch: ${response.status} ${response.statusText}`);
@@ -135,7 +135,7 @@ export class GitHubService {
 
   async getRateLimit(): Promise<{ remaining: number; reset: number } | null> {
     try {
-      const response = await fetch('https://api.github.com/rate_limit', { headers: this.buildHeaders() });
+      const response = await fetch('https://api.github.com/rate_limit', { headers: this.buildHeaders(), signal: AbortSignal.timeout(10_000) });
       if (!response.ok) return null;
       const data = (await response.json()) as GitHubRateLimitResponse;
       return {

@@ -393,6 +393,44 @@ export function setupRestRoutes(app: Express, services: Services) {
     }
   });
 
+  // Worktree base path setting endpoints (protected) — must be before generic /:category routes
+
+  // Get worktree base path
+  app.get('/api/settings/worktree-base-path', authService.requireAuth, (req, res) => {
+    try {
+      const value = databaseService.settings.get<string>('general', 'worktreeBasePath');
+      res.json({ path: value ?? null });
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Set worktree base path
+  app.put('/api/settings/worktree-base-path', authService.requireAuth, async (req, res) => {
+    try {
+      const { path: basePath } = req.body;
+
+      if (!basePath || typeof basePath !== 'string') {
+        return res.status(400).json({ error: 'path is required and must be a string' });
+      }
+
+      const fs = await import('fs/promises');
+      try {
+        const stats = await fs.stat(basePath);
+        if (!stats.isDirectory()) {
+          return res.status(400).json({ error: `Path is not a directory: ${basePath}` });
+        }
+      } catch {
+        return res.status(400).json({ error: `Path does not exist: ${basePath}` });
+      }
+
+      databaseService.settings.set('general', 'worktreeBasePath', basePath);
+      res.json({ path: basePath });
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
   // Generic settings endpoints (protected)
 
   // Get all settings for a category
@@ -427,41 +465,6 @@ export function setupRestRoutes(app: Express, services: Services) {
       }
       const result = databaseService.settings.set(category as any, key, value);
       res.json(result);
-    } catch (error) {
-      res.status(500).json({ error: (error as Error).message });
-    }
-  });
-
-  // Worktree base path setting endpoints (protected)
-
-  // Get worktree base path
-  app.get('/api/settings/worktree-base-path', authService.requireAuth, (req, res) => {
-    try {
-      const value = databaseService.settings.get<string>('general', 'worktreeBasePath');
-      res.json({ path: value ?? null });
-    } catch (error) {
-      res.status(500).json({ error: (error as Error).message });
-    }
-  });
-
-  // Set worktree base path
-  app.put('/api/settings/worktree-base-path', authService.requireAuth, async (req, res) => {
-    try {
-      const { path: basePath } = req.body;
-
-      if (!basePath || typeof basePath !== 'string') {
-        return res.status(400).json({ error: 'path is required and must be a string' });
-      }
-
-      const fs = await import('fs/promises');
-      try {
-        await fs.access(basePath);
-      } catch {
-        return res.status(400).json({ error: `Path does not exist: ${basePath}` });
-      }
-
-      databaseService.settings.set('general', 'worktreeBasePath', basePath);
-      res.json({ path: basePath });
     } catch (error) {
       res.status(500).json({ error: (error as Error).message });
     }

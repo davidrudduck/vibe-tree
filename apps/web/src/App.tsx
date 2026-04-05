@@ -11,6 +11,7 @@ import { useWebSocket } from './hooks/useWebSocket';
 import { Sun, Moon, Plus, X, Terminal, GitBranch, CheckCircle } from 'lucide-react';
 import { autoLoadProjects } from './services/projectValidation';
 import { getServerHttpUrl } from './services/portDiscovery';
+import { getAuthHeaders } from './services/authService';
 
 function App() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -118,7 +119,7 @@ function App() {
       const httpUrl = await getServerHttpUrl();
       await fetch(`${httpUrl}/api/projects/recent`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ path }),
       });
     } catch {

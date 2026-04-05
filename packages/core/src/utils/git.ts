@@ -21,7 +21,7 @@ export function executeGitCommand(args: string[], cwd: string): Promise<string> 
     let stderr = '';
 
     child.on('error', (err) => {
-      reject(new Error(`Failed to spawn git: ${err.message}`));
+      reject(new Error(`Failed to spawn git in "${cwd}" for "git ${args.join(' ')}": ${err.message}`));
     });
 
     child.stdout.on('data', (data) => {
@@ -333,6 +333,12 @@ export async function parseGitHubRepo(remoteUrl: string): Promise<{ owner: strin
   const sshMatch = remoteUrl.match(/^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/);
   if (sshMatch) {
     return { owner: sshMatch[1], repo: sshMatch[2] };
+  }
+
+  // SSH URL: ssh://git@github.com/owner/repo.git or ssh://git@github.com/owner/repo
+  const sshUrlMatch = remoteUrl.match(/^ssh:\/\/git@github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/);
+  if (sshUrlMatch) {
+    return { owner: sshUrlMatch[1], repo: sshUrlMatch[2] };
   }
 
   return null;

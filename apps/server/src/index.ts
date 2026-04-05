@@ -137,7 +137,7 @@ Possible solutions:
       const serverPortFile = path.join(__dirname, '../../../apps/web/.server-port');
       fs.writeFileSync(serverPortFile, PORT.toString());
     } catch (error) {
-      console.warn('Could not write .server-port file');
+      console.warn('Could not write .server-port file:', error);
     }
 
     const socketUrls = getNetworkUrls(PORT, HOST);
