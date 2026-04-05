@@ -219,6 +219,21 @@ export class ProjectRepository {
   }
 
   /**
+   * Prune projects whose paths no longer exist on disk
+   */
+  pruneStale(): number {
+    const allProjects = this.findRecent(100);
+    let pruned = 0;
+    for (const project of allProjects) {
+      if (!require('fs').existsSync(project.path)) {
+        this.deleteByPath(project.path);
+        pruned++;
+      }
+    }
+    return pruned;
+  }
+
+  /**
    * Enforce max recent projects limit (delete oldest non-favorited projects)
    */
   private enforceRecentLimit(): void {

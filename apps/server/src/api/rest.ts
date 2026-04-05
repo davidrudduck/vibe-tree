@@ -218,10 +218,31 @@ export function setupRestRoutes(app: Express, services: Services) {
       const defaultProjectsEnv = process.env.DEFAULT_PROJECTS;
       
       if (!defaultProjectsEnv || defaultProjectsEnv.trim() === '') {
-        return res.json({ 
-          projectPaths: [], 
-          validationResults: [], 
-          defaultProjectPath: null 
+        // No env var configured — fall back to recent projects from database
+        const recentProjects = databaseService.projects.findRecent(10);
+        if (recentProjects.length > 0) {
+          const recentPaths = recentProjects.map((p: any) => p.path);
+          const validationResults = await validateProjects(recentPaths);
+
+          // Remove invalid projects from the database
+          for (const result of validationResults) {
+            if (!result.valid) {
+              databaseService.projects.deleteByPath(result.path);
+            }
+          }
+
+          const validPaths = validationResults.filter(result => result.valid).map(result => result.path);
+          const defaultProjectPath = validPaths[0] || null;
+          return res.json({
+            projectPaths: validPaths,
+            validationResults: validationResults.filter(result => result.valid),
+            defaultProjectPath
+          });
+        }
+        return res.json({
+          projectPaths: [],
+          validationResults: [],
+          defaultProjectPath: null
         });
       }
       
@@ -367,6 +388,142 @@ export function setupRestRoutes(app: Express, services: Services) {
     try {
       const settings = databaseService.settings.resetTerminalSettings();
       res.json(settings);
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Worktree base path setting endpoints (protected) — must be before generic /:category routes
+
+  // Get worktree base path
+  app.get('/api/settings/worktree-base-path', authService.requireAuth, (req, res) => {
+    try {
+      const value = databaseService.settings.get<string>('general', 'worktreeBasePath');
+      res.json({ path: value ?? null });
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Set worktree base path
+  app.put('/api/settings/worktree-base-path', authService.requireAuth, async (req, res) => {
+    try {
+      const { path: basePath } = req.body;
+
+      if (!basePath || typeof basePath !== 'string') {
+        return res.status(400).json({ error: 'path is required and must be a string' });
+      }
+
+      const fs = await import('fs/promises');
+      try {
+        const stats = await fs.stat(basePath);
+        if (!stats.isDirectory()) {
+          return res.status(400).json({ error: `Path is not a directory: ${basePath}` });
+        }
+      } catch {
+        return res.status(400).json({ error: `Path does not exist: ${basePath}` });
+      }
+
+      databaseService.settings.set('general', 'worktreeBasePath', basePath);
+      res.json({ path: basePath });
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Generic settings endpoints (protected)
+
+  // Get all settings for a category
+  app.get('/api/settings/:category', authService.requireAuth, (req, res) => {
+    try {
+      const category = req.params.category as any;
+      const settings = databaseService.settings.getByCategory(category);
+      res.json(settings);
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Get a specific setting
+  app.get('/api/settings/:category/:key', authService.requireAuth, (req, res) => {
+    try {
+      const { category, key } = req.params;
+      const value = databaseService.settings.get(category as any, key);
+      res.json({ value: value ?? null });
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Set a specific setting
+  app.put('/api/settings/:category/:key', authService.requireAuth, (req, res) => {
+    try {
+      const { category, key } = req.params;
+      const { value } = req.body;
+      if (value === undefined) {
+        return res.status(400).json({ error: 'value is required' });
+      }
+      const result = databaseService.settings.set(category as any, key, value);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Prune stale projects (protected)
+  app.post('/api/projects/prune', authService.requireAuth, (req, res) => {
+    try {
+      const pruned = databaseService.projects.pruneStale();
+      res.json({ pruned });
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // GitHub PR endpoints (protected)
+
+  // Get open PRs for a project's GitHub repo
+  app.get('/api/projects/:projectPath/pulls', authService.requireAuth, async (req, res) => {
+    try {
+      const { getRemoteUrl, parseGitHubRepo } = await import('@vibetree/core');
+      const { GitHubService } = await import('../services/GitHubService');
+      const projectPath = decodeURIComponent(req.params.projectPath);
+      const remoteUrl = await getRemoteUrl(projectPath);
+      if (!remoteUrl) return res.json([]);
+      const repo = await parseGitHubRepo(remoteUrl);
+      if (!repo) return res.json([]);
+      const pulls = await GitHubService.getInstance().getPullRequests(repo.owner, repo.repo);
+      res.json(pulls);
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Get PR for a specific branch
+  app.get('/api/projects/:projectPath/pulls/:branch', authService.requireAuth, async (req, res) => {
+    try {
+      const { getRemoteUrl, parseGitHubRepo } = await import('@vibetree/core');
+      const { GitHubService } = await import('../services/GitHubService');
+      const projectPath = decodeURIComponent(req.params.projectPath);
+      const branch = req.params.branch;
+      const remoteUrl = await getRemoteUrl(projectPath);
+      if (!remoteUrl) return res.json(null);
+      const repo = await parseGitHubRepo(remoteUrl);
+      if (!repo) return res.json(null);
+      const pull = await GitHubService.getInstance().getPullRequestForBranch(repo.owner, repo.repo, branch);
+      res.json(pull);
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Get GitHub token/rate-limit status
+  app.get('/api/github/status', authService.requireAuth, async (req, res) => {
+    try {
+      const { GitHubService } = await import('../services/GitHubService');
+      const svc = GitHubService.getInstance();
+      const rateLimit = await svc.getRateLimit();
+      res.json({ configured: svc.isConfigured(), rateLimit });
     } catch (error) {
       res.status(500).json({ error: (error as Error).message });
     }

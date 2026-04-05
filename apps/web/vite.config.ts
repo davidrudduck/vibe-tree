@@ -33,6 +33,22 @@ function portCapturePlugin() {
   return {
     name: 'port-capture',
     configureServer(server: ViteDevServer) {
+      // Serve the backend server port so the frontend can discover it without scanning
+      server.middlewares.use('/__server-port', (_req, res) => {
+        try {
+          const port = fs.readFileSync('.server-port', 'utf8').trim();
+          const parsedPort = parseInt(port, 10);
+          if (isNaN(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
+            throw new Error('Invalid port value');
+          }
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ port: parsedPort }));
+        } catch {
+          res.statusCode = 404;
+          res.end(JSON.stringify({ error: 'Server port not yet available' }));
+        }
+      });
+
       // Hook into the server listening event
       server.httpServer?.on('listening', () => {
         const address = server.httpServer?.address();

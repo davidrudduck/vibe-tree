@@ -1,13 +1,17 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { ShellManager } from '../services/ShellManager';
 import { AuthService } from '../auth/AuthService';
+import { databaseService } from '../services/DatabaseService';
 import {
   listWorktrees,
+  listBranches,
   getGitStatus,
   getGitDiff,
   getGitDiffStaged,
   addWorktree,
-  removeWorktree
+  removeWorktree,
+  getAheadBehind,
+  getDiffVsMain
 } from '@vibetree/core';
 
 interface Services {
@@ -308,11 +312,32 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
             break;
           }
 
+          case 'git:branches': {
+            try {
+              const branches = await listBranches(message.payload.projectPath);
+              ws.send(JSON.stringify({
+                type: 'git:branches:response',
+                payload: { branches },
+                id: message.id
+              }));
+            } catch (error) {
+              ws.send(JSON.stringify({
+                type: 'error',
+                payload: { error: (error as Error).message },
+                id: message.id
+              }));
+            }
+            break;
+          }
+
           case 'git:worktree:add': {
             try {
+              const worktreeBasePath = databaseService.settings.get<string>('general', 'worktreeBasePath') ?? undefined;
               const result = await addWorktree(
                 message.payload.projectPath,
-                message.payload.branchName
+                message.payload.branchName,
+                worktreeBasePath,
+                message.payload.startPoint
               );
               ws.send(JSON.stringify({
                 type: 'git:worktree:add:response',
@@ -334,11 +359,54 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
               const result = await removeWorktree(
                 message.payload.projectPath,
                 message.payload.worktreePath,
-                message.payload.branchName
+                message.payload.branchName,
+                message.payload.force ?? false
               );
               ws.send(JSON.stringify({
                 type: 'git:worktree:remove:response',
                 payload: result,
+                id: message.id
+              }));
+            } catch (error) {
+              ws.send(JSON.stringify({
+                type: 'error',
+                payload: { error: (error as Error).message },
+                id: message.id
+              }));
+            }
+            break;
+          }
+
+          case 'git:ahead-behind': {
+            try {
+              const result = await getAheadBehind(
+                message.payload.worktreePath,
+                message.payload.baseBranch
+              );
+              ws.send(JSON.stringify({
+                type: 'git:ahead-behind:response',
+                payload: result,
+                id: message.id
+              }));
+            } catch (error) {
+              ws.send(JSON.stringify({
+                type: 'error',
+                payload: { error: (error as Error).message },
+                id: message.id
+              }));
+            }
+            break;
+          }
+
+          case 'git:diff-vs-main': {
+            try {
+              const diff = await getDiffVsMain(
+                message.payload.worktreePath,
+                message.payload.baseBranch
+              );
+              ws.send(JSON.stringify({
+                type: 'git:diff-vs-main:response',
+                payload: { diff },
                 id: message.id
               }));
             } catch (error) {

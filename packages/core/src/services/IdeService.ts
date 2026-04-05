@@ -1,8 +1,9 @@
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export interface IDE {
   name: string;
@@ -67,8 +68,11 @@ export class IdeService {
     }
 
     try {
-      const command = `${ide.command} "${targetPath}"`;
-      await execAsync(command);
+      // Use execFile to avoid command injection via targetPath
+      const parts = ide.command.split(/\s+/);
+      const cmd = parts[0];
+      const args = [...parts.slice(1), targetPath];
+      await execFileAsync(cmd, args);
       return { success: true };
     } catch (error) {
       return {

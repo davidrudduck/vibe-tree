@@ -134,14 +134,6 @@ class DesktopShellManager {
             this.broadcastSessionChange();
           });
 
-        // Add exit listener
-        this.sessionManager!.addExitListener(processId, listenerId, (exitCode: number) => {
-          this.safeSend(event.sender, `shell:exit:${processId}`, exitCode);
-          // Broadcast session change when terminal exits
-          this.broadcastSessionChange();
-        });
-
-        if (result.isNew) {
           // Broadcast session change for new terminal
           this.broadcastSessionChange();
         } else {
@@ -165,7 +157,10 @@ class DesktopShellManager {
     });
 
     ipcMain.handle('shell:get-foreground-process', async (_, processId: string) => {
-      return this.forkManager.getForegroundProcess(processId);
+      if (this.sessionManager && 'getForegroundProcess' in this.sessionManager) {
+        return (this.sessionManager as any).getForegroundProcess(processId);
+      }
+      return null;
     });
 
     ipcMain.handle('shell:get-buffer', async () => {

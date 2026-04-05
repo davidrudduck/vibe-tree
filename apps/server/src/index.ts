@@ -96,6 +96,10 @@ Possible solutions:
 
   // Initialize database
   databaseService.initialize();
+  const pruned = databaseService.projects.pruneStale();
+  if (pruned > 0) {
+    console.log(`[Database] Pruned ${pruned} stale project(s)`);
+  }
 
   // Setup REST routes
   setupRestRoutes(app, { shellManager, authService });
@@ -128,8 +132,16 @@ Possible solutions:
 
   // Start server
   server.listen(parseInt(PORT.toString()), HOST, async () => {
+    // Write server port to file so the frontend can discover it without scanning
+    try {
+      const serverPortFile = path.join(__dirname, '../../../apps/web/.server-port');
+      fs.writeFileSync(serverPortFile, PORT.toString());
+    } catch (error) {
+      console.warn('Could not write .server-port file:', error);
+    }
+
     const socketUrls = getNetworkUrls(PORT, HOST);
-    
+
     // Try to read web port from file, fallback to 3000
     let webPort = 3000;
     try {

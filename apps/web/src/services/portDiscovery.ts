@@ -29,27 +29,42 @@ async function discoverServerPort(): Promise<number> {
     }
   }
 
-  // Use current hostname for discovery (supports network access)
+  // Try reading the server port from the Vite endpoint (no CORS, same origin)
+  try {
+    const response = await fetch('/__server-port', {
+      signal: AbortSignal.timeout(1000)
+    });
+    if (response.ok) {
+      const data = await response.json();
+      if (data.port) {
+        cachedServerPort = data.port;
+        console.log(`✓ Discovered server port via endpoint: ${data.port}`);
+        return data.port;
+      }
+    }
+  } catch {
+    // Endpoint not available, fall back to port scanning
+  }
+
+  // Fallback: scan ports (for production or when Vite endpoint unavailable)
   const hostname = window.location.hostname;
   const protocol = window.location.protocol;
-
-  // Start with default port 3002 and check sequential ports
   const startPort = 3002;
 
-  for (let i = 0; i < 50; i++) { // Check 50 sequential ports max
+  for (let i = 0; i < 10; i++) {
     const port = startPort + i;
     try {
       const response = await fetch(`${protocol}//${hostname}:${port}/health`, {
         method: 'GET',
-        signal: AbortSignal.timeout(500) // 500ms timeout for faster discovery
+        signal: AbortSignal.timeout(500)
       });
 
       if (response.ok) {
         cachedServerPort = port;
-        console.log(`✓ Discovered server port: ${port}`);
+        console.log(`✓ Discovered server port via scan: ${port}`);
         return port;
       }
-    } catch (error) {
+    } catch {
       // Continue trying next port
     }
   }
