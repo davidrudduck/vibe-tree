@@ -1,22 +1,6 @@
 import { getServerHttpUrl } from '../services/portDiscovery';
 import { getAuthHeaders } from '../services/authService';
-
-interface TerminalSettings {
-  fontFamily: string;
-  fontSize: number;
-  cursorBlink: boolean;
-  scrollback: number;
-  tabStopWidth: number;
-  setLocaleVariables: boolean;
-}
-
-interface SettingsAdapter {
-  getTerminalSettings(): Promise<TerminalSettings>;
-  updateTerminalSettings(updates: Partial<TerminalSettings>): Promise<TerminalSettings>;
-  resetTerminalSettings(): Promise<TerminalSettings>;
-  getWorktreeBasePath(): Promise<string | null>;
-  setWorktreeBasePath(path: string): Promise<void>;
-}
+import type { SettingsAdapter, TerminalSettings } from '@vibetree/ui';
 
 export class RestSettingsAdapter implements SettingsAdapter {
   private async fetchJson<T>(path: string, options?: RequestInit): Promise<T> {

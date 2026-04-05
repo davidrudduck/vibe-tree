@@ -11,7 +11,7 @@ export const DEFAULT_TERMINAL_SETTINGS: TerminalSettings = {
   fontFamily: 'Menlo, Monaco, "Courier New", monospace',
   fontSize: 14,
   cursorBlink: true,
-  scrollback: 5000,
+  scrollback: 10000,
   tabStopWidth: 8,
   setLocaleVariables: true,
 };

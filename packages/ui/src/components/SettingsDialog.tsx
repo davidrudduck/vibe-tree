@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import clsx from 'clsx';
 import type { SettingsAdapter, TerminalSettings } from '../types/settings';
 import { DEFAULT_TERMINAL_SETTINGS } from '../types/settings';
@@ -89,36 +89,69 @@ const closeButtonStyle: React.CSSProperties = {
   borderRadius: '4px',
 };
 
+const errorStyle: React.CSSProperties = {
+  color: '#f44',
+  fontSize: '12px',
+  marginTop: '4px',
+};
+
 export function SettingsDialog({ adapter, open, onClose }: SettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<ActiveTab>('terminal');
   const [settings, setSettings] = useState<TerminalSettings>(DEFAULT_TERMINAL_SETTINGS);
   const [worktreeBasePath, setWorktreeBasePath] = useState<string>('');
   const [worktreePathDraft, setWorktreePathDraft] = useState<string>('');
   const [saving, setSaving] = useState(false);
+  const [worktreeError, setWorktreeError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    adapter.getTerminalSettings().then(setSettings).catch(() => {});
+    adapter.getTerminalSettings().then(setSettings).catch((err) => {
+      console.error('Failed to load terminal settings:', err);
+    });
     adapter.getWorktreeBasePath().then((p) => {
       const val = p ?? '';
       setWorktreeBasePath(val);
       setWorktreePathDraft(val);
-    }).catch(() => {});
+    }).catch((err) => {
+      console.error('Failed to load worktree base path:', err);
+    });
   }, [open, adapter]);
 
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
   const handleTerminalChange = useCallback(
-    async <K extends keyof TerminalSettings>(key: K, value: TerminalSettings[K]) => {
-      const updated = await adapter.updateTerminalSettings({ [key]: value });
-      setSettings(updated);
+    <K extends keyof TerminalSettings>(key: K, value: TerminalSettings[K]) => {
+      // Update local state immediately for responsive UI
+      setSettings((prev) => ({ ...prev, [key]: value }));
+
+      // Debounce the API call
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(async () => {
+        try {
+          const updated = await adapter.updateTerminalSettings({ [key]: value });
+          setSettings(updated);
+        } catch (err) {
+          console.error('Failed to save terminal settings:', err);
+        }
+      }, 500);
     },
     [adapter],
   );
 
   const handleSaveWorktreePath = useCallback(async () => {
     setSaving(true);
+    setWorktreeError(null);
     try {
       await adapter.setWorktreeBasePath(worktreePathDraft);
       setWorktreeBasePath(worktreePathDraft);
+    } catch (err) {
+      setWorktreeError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setSaving(false);
     }
@@ -238,7 +271,7 @@ export function SettingsDialog({ adapter, open, onClose }: SettingsDialogProps) 
                   <input
                     type="text"
                     value={worktreePathDraft}
-                    onChange={(e) => setWorktreePathDraft(e.target.value)}
+                    onChange={(e) => { setWorktreePathDraft(e.target.value); setWorktreeError(null); }}
                     placeholder="/path/to/worktrees"
                     style={{ ...inputStyle, flex: 1, width: 'auto' }}
                   />
@@ -260,6 +293,7 @@ export function SettingsDialog({ adapter, open, onClose }: SettingsDialogProps) 
                     {saving ? 'Saving…' : 'Save'}
                   </button>
                 </div>
+                {worktreeError && <div style={errorStyle}>{worktreeError}</div>}
               </div>
             </div>
           )}
