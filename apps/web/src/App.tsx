@@ -5,19 +5,23 @@ import { TerminalManager } from './components/TerminalManager';
 import { GitDiffView } from './components/GitDiffView';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { ProjectSelector } from './components/ProjectSelector';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@vibetree/ui';
+import { Tabs, TabsList, TabsTrigger, TabsContent, SettingsDialog } from '@vibetree/ui';
 import { useAppStore } from './store';
 import { useWebSocket } from './hooks/useWebSocket';
-import { Sun, Moon, Plus, X, Terminal, GitBranch, CheckCircle } from 'lucide-react';
+import { Sun, Moon, Plus, X, Terminal, GitBranch, CheckCircle, Settings } from 'lucide-react';
 import { autoLoadProjects } from './services/projectValidation';
 import { getServerHttpUrl } from './services/portDiscovery';
 import { getAuthHeaders } from './services/authService';
+import { RestSettingsAdapter } from './adapters/SettingsAdapter';
+
+const settingsAdapter = new RestSettingsAdapter();
 
 function App() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { projects, activeProjectId, addProject, addProjects, removeProject, setActiveProject, setSelectedTab, theme, setTheme, connected } = useAppStore();
   const { connect } = useWebSocket();
   const [showProjectSelector, setShowProjectSelector] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [autoLoadAttempted, setAutoLoadAttempted] = useState(false);
   const [showSuccessNotification, setShowSuccessNotification] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -195,6 +199,13 @@ function App() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setShowSettings(true)}
+            className="p-2 hover:bg-accent rounded-md transition-colors"
+            aria-label="Settings"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+          <button
             onClick={toggleTheme}
             className="p-2 hover:bg-accent rounded-md transition-colors"
             aria-label="Toggle theme"
@@ -206,6 +217,11 @@ function App() {
             )}
           </button>
           <ConnectionStatus />
+          <SettingsDialog
+            adapter={settingsAdapter}
+            open={showSettings}
+            onClose={() => setShowSettings(false)}
+          />
         </div>
       </header>
 

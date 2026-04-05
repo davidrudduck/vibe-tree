@@ -10,6 +10,11 @@ export type { TabsProps, TabsListProps, TabsTriggerProps, TabsContentProps } fro
 export { ErrorBoundary } from './components/ErrorBoundary';
 export type { ErrorBoundaryProps, ErrorBoundaryState } from './components/ErrorBoundary';
 
+// Export settings dialog component and types
+export { SettingsDialog } from './components/SettingsDialog';
+export type { SettingsAdapter, TerminalSettings } from './types/settings';
+export { DEFAULT_TERMINAL_SETTINGS } from './types/settings';
+
 // Future exports for other shared components
 // export { WorktreeList } from './components/WorktreeList';
 // export { GitDiffViewer } from './components/GitDiffViewer';
