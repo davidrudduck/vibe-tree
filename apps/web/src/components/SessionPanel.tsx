@@ -31,7 +31,7 @@ function getRelativeTime(dateStr: string): string {
 }
 
 function basename(path: string): string {
-  return path.split('/').filter(Boolean).pop() || path;
+  return path.split(/[\\/]/).filter(Boolean).pop() || path;
 }
 
 const overlayStyle: React.CSSProperties = {
@@ -141,8 +141,10 @@ export function SessionPanel({ projectPath, onClose }: SessionPanelProps) {
     if (!adapter) return;
     setTerminatingIds((prev) => new Set(prev).add(sessionId));
     try {
-      await (adapter as any).sendMessage('shell:terminate', { sessionId });
-      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      const res = await (adapter as any).sendMessage('shell:terminate', { sessionId });
+      if (res?.success !== false) {
+        setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      }
     } catch (err) {
       console.error('Failed to terminate session:', err);
     } finally {
@@ -155,8 +157,8 @@ export function SessionPanel({ projectPath, onClose }: SessionPanelProps) {
   };
 
   return (
-    <div style={overlayStyle} onClick={onClose}>
-      <div style={panelStyle} onClick={(e) => e.stopPropagation()}>
+    <div style={overlayStyle} onClick={onClose} onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}>
+      <div style={panelStyle} role="dialog" aria-modal="true" aria-label="Terminal Sessions" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div style={headerStyle}>
           <span style={{ fontWeight: 600, fontSize: '14px' }}>Terminal Sessions</span>
