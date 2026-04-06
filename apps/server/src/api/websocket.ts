@@ -11,7 +11,8 @@ import {
   addWorktree,
   removeWorktree,
   getAheadBehind,
-  getDiffVsMain
+  getDiffVsMain,
+  getMainBranchName
 } from '@vibetree/core';
 
 interface Services {
@@ -481,6 +482,24 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
               ws.send(JSON.stringify({
                 type: 'shell:disconnect:response',
                 payload: { success: true },
+                id: message.id
+              }));
+            } catch (error) {
+              ws.send(JSON.stringify({
+                type: 'error',
+                payload: { error: (error as Error).message },
+                id: message.id
+              }));
+            }
+            break;
+          }
+
+          case 'git:main-branch-name': {
+            try {
+              const mainBranch = await getMainBranchName(message.payload.projectPath);
+              ws.send(JSON.stringify({
+                type: 'git:main-branch-name:response',
+                payload: { branch: mainBranch },
                 id: message.id
               }));
             } catch (error) {

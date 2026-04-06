@@ -19,6 +19,7 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
   const [loading, setLoading] = useState(false);
   const [showNewBranchDialog, setShowNewBranchDialog] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
+  const [aheadBehind, setAheadBehind] = useState<Map<string, { ahead: number; behind: number }>>(new Map());
   
   const project = getProject(projectId);
   const adapter = getAdapter(); // Get adapter once per render
@@ -109,6 +110,20 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
         console.log('✅ Worktrees loaded:', trees);
         updateProjectWorktrees(projectId, trees);
         console.log('✅ Project worktrees updated');
+
+        // Fetch main branch name and ahead/behind for each worktree
+        const fetchedMainBranch = await adapter.getMainBranchName(project.path).catch(() => 'main');
+
+        const results = new Map<string, { ahead: number; behind: number }>();
+        await Promise.all(trees.map(async (wt) => {
+          try {
+            const ab = await adapter.getAheadBehind(wt.path, fetchedMainBranch);
+            results.set(wt.path, ab);
+          } catch {
+            results.set(wt.path, { ahead: 0, behind: 0 });
+          }
+        }));
+        setAheadBehind(results);
       } catch (error) {
         console.error('❌ Failed to load worktrees:', error);
       } finally {
@@ -218,6 +233,21 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
                         ? worktree.branch.replace('refs/heads/', '')
                         : `Detached HEAD (${worktree.head.substring(0, 8)})`}
                     </div>
+                    {/* Ahead/Behind badges */}
+                    {(() => {
+                      const ab = aheadBehind.get(worktree.path);
+                      if (!ab || (ab.ahead === 0 && ab.behind === 0)) return null;
+                      return (
+                        <div className="flex gap-1 text-xs mt-0.5">
+                          {ab.ahead > 0 && (
+                            <span className="text-green-400">↑{ab.ahead}</span>
+                          )}
+                          {ab.behind > 0 && (
+                            <span className="text-red-400">↓{ab.behind}</span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </button>
