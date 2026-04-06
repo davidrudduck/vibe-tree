@@ -12,7 +12,7 @@ export type { ErrorBoundaryProps, ErrorBoundaryState } from './components/ErrorB
 
 // Export settings dialog component and types
 export { SettingsDialog } from './components/SettingsDialog';
-export type { SettingsAdapter, TerminalSettings } from './types/settings';
+export type { SettingsAdapter, TerminalSettings, Project } from './types/settings';
 export { DEFAULT_TERMINAL_SETTINGS } from './types/settings';
 
 // Future exports for other shared components

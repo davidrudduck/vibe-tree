@@ -470,6 +470,40 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
             break;
           }
 
+          case 'tmux:list-all': {
+            try {
+              const { execSync } = require('child_process');
+              let allSessions: Array<{ name: string; windows: number; created: string; attached: boolean; isVibeTree: boolean }> = [];
+              try {
+                const output = execSync('tmux list-sessions -F "#{session_name}|#{session_windows}|#{session_created}|#{session_attached}"', { encoding: 'utf8' });
+                allSessions = output.trim().split('\n').filter(Boolean).map((line: string) => {
+                  const [name, windows, created, attached] = line.split('|');
+                  return {
+                    name,
+                    windows: parseInt(windows) || 1,
+                    created: new Date(parseInt(created) * 1000).toISOString(),
+                    attached: attached === '1',
+                    isVibeTree: name.startsWith('vt-'),
+                  };
+                });
+              } catch {
+                // tmux not running or no sessions
+              }
+              ws.send(JSON.stringify({
+                type: 'tmux:list-all:response',
+                payload: { sessions: allSessions },
+                id: message.id
+              }));
+            } catch (error) {
+              ws.send(JSON.stringify({
+                type: 'error',
+                payload: { error: (error as Error).message },
+                id: message.id
+              }));
+            }
+            break;
+          }
+
           case 'shell:disconnect': {
             try {
               const { sessionId } = message.payload;

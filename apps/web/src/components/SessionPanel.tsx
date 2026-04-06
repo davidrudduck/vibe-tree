@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, RefreshCw, Trash2 } from 'lucide-react';
 import { useWebSocket } from '../hooks/useWebSocket';
+import type { WebSocketAdapter } from '../adapters/WebSocketAdapter';
 
 interface TerminalSession {
   id: string;
@@ -10,6 +11,14 @@ interface TerminalSession {
   status: 'active' | 'disconnected' | 'dead';
   createdAt: string;
   lastActivity: string;
+}
+
+interface TmuxSession {
+  name: string;
+  windows: number;
+  created: string;
+  attached: boolean;
+  isVibeTree: boolean;
 }
 
 interface SessionPanelProps {
@@ -110,9 +119,31 @@ const iconBtnStyle: React.CSSProperties = {
   alignItems: 'center',
 };
 
+const sectionHeaderStyle: React.CSSProperties = {
+  padding: '8px 16px',
+  fontSize: '11px',
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+  color: 'var(--text-muted, #6b7280)',
+  backgroundColor: 'var(--bg-secondary, #252525)',
+  borderBottom: '1px solid var(--border-color, #2a2a2a)',
+};
+
+const vtBadgeStyle: React.CSSProperties = {
+  fontSize: '9px',
+  fontWeight: 700,
+  padding: '1px 4px',
+  borderRadius: '3px',
+  backgroundColor: '#3b82f6',
+  color: '#fff',
+  flexShrink: 0,
+};
+
 export function SessionPanel({ projectPath, onClose }: SessionPanelProps) {
   const { getAdapter } = useWebSocket();
   const [sessions, setSessions] = useState<TerminalSession[]>([]);
+  const [tmuxSessions, setTmuxSessions] = useState<TmuxSession[]>([]);
   const [loading, setLoading] = useState(false);
   const [terminatingIds, setTerminatingIds] = useState<Set<string>>(new Set());
 
@@ -121,8 +152,12 @@ export function SessionPanel({ projectPath, onClose }: SessionPanelProps) {
     if (!adapter) return;
     setLoading(true);
     try {
-      const all: TerminalSession[] = await adapter.listSessions();
-      setSessions(all.filter((s) => s.projectPath === projectPath));
+      const [all, allTmux] = await Promise.all([
+        adapter.listSessions(),
+        (adapter as WebSocketAdapter).listAllTmuxSessions().catch(() => [] as TmuxSession[]),
+      ]);
+      setSessions((all as TerminalSession[]).filter((s) => s.projectPath === projectPath));
+      setTmuxSessions(allTmux);
     } catch (err) {
       console.error('Failed to list sessions:', err);
     } finally {
@@ -207,6 +242,44 @@ export function SessionPanel({ projectPath, onClose }: SessionPanelProps) {
                 >
                   <Trash2 size={14} />
                 </button>
+              </div>
+            ))
+          )}
+
+          {/* All tmux Sessions section */}
+          <div style={sectionHeaderStyle}>All tmux Sessions</div>
+          {tmuxSessions.length === 0 ? (
+            <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted, #6b7280)', fontSize: '13px' }}>
+              {loading ? 'Loading...' : 'No tmux sessions found'}
+            </div>
+          ) : (
+            tmuxSessions.map((session) => (
+              <div
+                key={session.name}
+                style={{
+                  ...sessionRowStyle,
+                  opacity: session.isVibeTree ? 1 : 0.75,
+                }}
+              >
+                <span
+                  style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    flexShrink: 0,
+                    backgroundColor: session.attached ? '#4ade80' : '#6b7280',
+                  }}
+                  title={session.attached ? 'attached' : 'detached'}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '13px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {session.name}
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted, #6b7280)', marginTop: '2px' }}>
+                    {session.windows} {session.windows === 1 ? 'window' : 'windows'} · {getRelativeTime(session.created)}
+                  </div>
+                </div>
+                {session.isVibeTree && <span style={vtBadgeStyle}>VT</span>}
               </div>
             ))
           )}

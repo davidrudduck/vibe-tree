@@ -1,6 +1,6 @@
 import { useAppStore } from '../store';
 import { useWebSocket } from '../hooks/useWebSocket';
-import { ChevronLeft, GitBranch, RefreshCw, Plus } from 'lucide-react';
+import { ChevronLeft, GitBranch, RefreshCw, Plus, Terminal } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 interface WorktreePanelProps {
@@ -12,7 +12,8 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
     getProject,
     updateProjectWorktrees,
     setSelectedWorktree,
-    connected
+    connected,
+    terminalSessions
   } = useAppStore();
 
   const { getAdapter } = useWebSocket();
@@ -270,10 +271,15 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
                 <div className="flex items-start gap-2">
                   <GitBranch className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <div className="truncate" style={{ fontSize: '21px', fontWeight: 'bold' }}>
-                      {worktree.branch
-                        ? worktree.branch.replace('refs/heads/', '')
-                        : `Detached HEAD (${worktree.head.substring(0, 8)})`}
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate" style={{ fontSize: '21px', fontWeight: 'bold' }}>
+                        {worktree.branch
+                          ? worktree.branch.replace('refs/heads/', '')
+                          : `Detached HEAD (${worktree.head.substring(0, 8)})`}
+                      </span>
+                      {terminalSessions.has(worktree.path) && (
+                        <Terminal className="h-3 w-3 text-green-400 flex-shrink-0" />
+                      )}
                     </div>
                     {/* Ahead/Behind badges */}
                     {(() => {

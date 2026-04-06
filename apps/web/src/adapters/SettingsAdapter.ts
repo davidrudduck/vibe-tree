@@ -1,6 +1,6 @@
 import { getServerHttpUrl } from '../services/portDiscovery';
 import { getAuthHeaders } from '../services/authService';
-import type { SettingsAdapter, TerminalSettings } from '@vibetree/ui';
+import type { SettingsAdapter, TerminalSettings, Project } from '@vibetree/ui';
 
 export class RestSettingsAdapter implements SettingsAdapter {
   private async fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
@@ -42,6 +42,28 @@ export class RestSettingsAdapter implements SettingsAdapter {
     await this.fetchJson('/api/settings/worktree-base-path', {
       method: 'PUT',
       body: JSON.stringify({ path }),
+    });
+  }
+
+  async getGitHubToken(): Promise<{ configured: boolean; masked: string | null }> {
+    return this.fetchJson('/api/settings/general/githubToken');
+  }
+
+  async setGitHubToken(token: string): Promise<void> {
+    await this.fetchJson('/api/settings/general/githubToken', {
+      method: 'PUT',
+      body: JSON.stringify({ value: token }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  async getProjects(): Promise<Project[]> {
+    return this.fetchJson<Project[]>('/api/projects/recent');
+  }
+
+  async removeProject(path: string): Promise<void> {
+    await this.fetchJson(`/api/projects/recent/${encodeURIComponent(path)}`, {
+      method: 'DELETE',
     });
   }
 }

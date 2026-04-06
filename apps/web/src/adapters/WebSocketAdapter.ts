@@ -199,6 +199,11 @@ export class WebSocketAdapter extends BaseAdapter {
     return this.sendMessage('shell:list-sessions', {}).then((response: any) => response.sessions || []);
   }
 
+  async listAllTmuxSessions(): Promise<Array<{ name: string; windows: number; created: string; attached: boolean; isVibeTree: boolean }>> {
+    const result = await this.sendMessage<{ sessions: any[] }>('tmux:list-all', {});
+    return result.sessions;
+  }
+
   async disconnectSession(sessionId: string): Promise<void> {
     await this.sendMessage('shell:disconnect', { sessionId });
   }

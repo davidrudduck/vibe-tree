@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import clsx from 'clsx';
-import type { SettingsAdapter, TerminalSettings } from '../types/settings';
+import type { SettingsAdapter, TerminalSettings, Project } from '../types/settings';
 import { DEFAULT_TERMINAL_SETTINGS } from '../types/settings';
 
 interface SettingsDialogProps {
@@ -11,7 +11,7 @@ interface SettingsDialogProps {
   onSettingsChange?: (settings: TerminalSettings) => void;
 }
 
-type ActiveTab = 'terminal' | 'general';
+type ActiveTab = 'terminal' | 'general' | 'projects';
 
 const overlayStyle: React.CSSProperties = {
   position: 'fixed',
@@ -103,6 +103,18 @@ export function SettingsDialog({ adapter, open, onClose, onSettingsChange }: Set
   const [worktreePathDraft, setWorktreePathDraft] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [worktreeError, setWorktreeError] = useState<string | null>(null);
+
+  // GitHub token state
+  const [githubToken, setGithubToken] = useState<string>('');
+  const [githubTokenConfigured, setGithubTokenConfigured] = useState(false);
+  const [githubTokenMasked, setGithubTokenMasked] = useState<string | null>(null);
+  const [githubTokenSaving, setGithubTokenSaving] = useState(false);
+  const [githubTokenError, setGithubTokenError] = useState<string | null>(null);
+
+  // Projects tab state
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -117,7 +129,26 @@ export function SettingsDialog({ adapter, open, onClose, onSettingsChange }: Set
     }).catch((err) => {
       console.error('Failed to load worktree base path:', err);
     });
+    adapter.getGitHubToken().then((result) => {
+      setGithubTokenConfigured(result.configured);
+      setGithubTokenMasked(result.masked);
+      setGithubToken('');
+    }).catch((err) => {
+      console.error('Failed to load GitHub token:', err);
+    });
   }, [open, adapter]);
+
+  useEffect(() => {
+    if (!open || activeTab !== 'projects') return;
+    setProjectsLoading(true);
+    adapter.getProjects().then((p) => {
+      setProjects(p);
+    }).catch((err) => {
+      console.error('Failed to load projects:', err);
+    }).finally(() => {
+      setProjectsLoading(false);
+    });
+  }, [open, activeTab, adapter]);
 
   // Cleanup debounce timer on unmount
   useEffect(() => {
@@ -159,6 +190,29 @@ export function SettingsDialog({ adapter, open, onClose, onSettingsChange }: Set
     }
   }, [adapter, worktreePathDraft]);
 
+  const handleSaveGitHubToken = useCallback(async () => {
+    setGithubTokenSaving(true);
+    setGithubTokenError(null);
+    try {
+      await adapter.setGitHubToken(githubToken);
+      setGithubTokenConfigured(true);
+      setGithubToken('');
+    } catch (err) {
+      setGithubTokenError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setGithubTokenSaving(false);
+    }
+  }, [adapter, githubToken]);
+
+  const handleRemoveProject = useCallback(async (path: string) => {
+    try {
+      await adapter.removeProject(path);
+      setProjects((prev) => prev.filter((p) => p.path !== path));
+    } catch (err) {
+      console.error('Failed to remove project:', err);
+    }
+  }, [adapter]);
+
   const handleOverlayClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (e.target === e.currentTarget) onClose();
@@ -167,6 +221,8 @@ export function SettingsDialog({ adapter, open, onClose, onSettingsChange }: Set
   );
 
   if (!open) return null;
+
+  const tabs: ActiveTab[] = ['terminal', 'general', 'projects'];
 
   return (
     <div style={overlayStyle} onClick={handleOverlayClick}>
@@ -181,7 +237,7 @@ export function SettingsDialog({ adapter, open, onClose, onSettingsChange }: Set
 
         {/* Tab bar */}
         <div style={tabBarStyle}>
-          {(['terminal', 'general'] as ActiveTab[]).map((tab) => (
+          {tabs.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -265,7 +321,7 @@ export function SettingsDialog({ adapter, open, onClose, onSettingsChange }: Set
           {activeTab === 'general' && (
             <div>
               {/* Worktree Base Path */}
-              <div style={{ marginBottom: '8px' }}>
+              <div style={{ marginBottom: '20px' }}>
                 <label style={{ ...labelStyle, display: 'block', marginBottom: '8px' }}>
                   Worktree Base Path
                 </label>
@@ -297,6 +353,113 @@ export function SettingsDialog({ adapter, open, onClose, onSettingsChange }: Set
                 </div>
                 {worktreeError && <div style={errorStyle}>{worktreeError}</div>}
               </div>
+
+              {/* GitHub Token */}
+              <div style={{ marginBottom: '8px' }}>
+                <label style={{ ...labelStyle, display: 'block', marginBottom: '4px' }}>
+                  GitHub Token
+                </label>
+                <div style={{ fontSize: '12px', marginBottom: '8px', color: 'var(--text-secondary, #858585)' }}>
+                  Status:{' '}
+                  {githubTokenConfigured ? (
+                    <span style={{ color: '#4caf50' }}>Configured</span>
+                  ) : (
+                    <span style={{ color: 'var(--text-secondary, #858585)' }}>Not configured</span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="password"
+                    value={githubToken}
+                    onChange={(e) => { setGithubToken(e.target.value); setGithubTokenError(null); }}
+                    placeholder={githubTokenConfigured ? '••••••••••••••••' : 'ghp_...'}
+                    style={{ ...inputStyle, flex: 1, width: 'auto' }}
+                  />
+                  <button
+                    onClick={handleSaveGitHubToken}
+                    disabled={githubTokenSaving || !githubToken}
+                    className={clsx('settings-save-btn')}
+                    style={{
+                      backgroundColor: 'var(--accent, #007acc)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '4px 12px',
+                      fontSize: '13px',
+                      cursor: githubTokenSaving || !githubToken ? 'not-allowed' : 'pointer',
+                      opacity: githubTokenSaving || !githubToken ? 0.5 : 1,
+                    }}
+                  >
+                    {githubTokenSaving ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+                {githubTokenError && <div style={errorStyle}>{githubTokenError}</div>}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'projects' && (
+            <div>
+              {projectsLoading ? (
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary, #858585)' }}>
+                  Loading projects…
+                </div>
+              ) : projects.length === 0 ? (
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary, #858585)' }}>
+                  No registered projects.
+                </div>
+              ) : (
+                <div>
+                  {projects.map((project) => (
+                    <div
+                      key={project.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '8px 0',
+                        borderBottom: '1px solid var(--border-color, #3c3c3c)',
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0, marginRight: '12px' }}>
+                        <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '2px' }}>
+                          {project.name || project.path.split('/').pop()}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '12px',
+                            color: 'var(--text-secondary, #858585)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                          title={project.path}
+                        >
+                          {project.path}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveProject(project.path)}
+                        aria-label={`Remove project ${project.name || project.path}`}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: 'var(--text-secondary, #858585)',
+                          padding: '4px',
+                          borderRadius: '4px',
+                          fontSize: '16px',
+                          lineHeight: 1,
+                          flexShrink: 0,
+                        }}
+                        title="Remove project"
+                      >
+                        🗑
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
