@@ -192,14 +192,15 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
 
               // Set up output forwarding using the new listener methods
               // This works for both new and existing sessions
-              shellManager.addOutputListener(result.processId, connectionId, (data) => {
+              await shellManager.addOutputListener(result.processId, connectionId, (data) => {
                 ws.send(JSON.stringify({
                   type: 'shell:output',
                   payload: { sessionId: result.processId, data }
                 }));
               });
 
-              shellManager.addExitListener(result.processId, connectionId, (exitCode) => {
+              await shellManager.addExitListener(result.processId, connectionId, (exitCode) => {
+                (databaseService as any).terminalSessions?.delete(result.processId!);
                 ws.send(JSON.stringify({
                   type: 'shell:exit',
                   payload: { sessionId: result.processId, code: exitCode }
@@ -207,7 +208,7 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
                 activeShellSessions.delete(result.processId!);
               });
             }
-            
+
             ws.send(JSON.stringify({
               type: 'shell:start:response',
               payload: result,
@@ -471,8 +472,9 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
           case 'shell:disconnect': {
             try {
               const { sessionId } = message.payload;
-              // Remove listeners but keep tmux alive
+              // Remove all listeners but keep tmux alive
               shellManager.removeOutputListener(sessionId, connectionId);
+              shellManager.removeExitListener(sessionId, connectionId);
               activeShellSessions.delete(sessionId);
               // Update DB status (optional chaining in case terminalSessions isn't available yet)
               (databaseService as any).terminalSessions?.updateStatus(sessionId, 'disconnected');
@@ -509,9 +511,10 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
 
     ws.on('close', (code, reason) => {
       console.log('💔 WebSocket connection closed:', { code, reason: reason.toString(), authenticated, deviceId });
-      // Remove output listeners for this connection but keep tmux sessions alive
+      // Remove all listeners for this connection but keep tmux sessions alive
       for (const sessionId of activeShellSessions) {
         shellManager.removeOutputListener(sessionId, connectionId);
+        shellManager.removeExitListener(sessionId, connectionId);
       }
     });
 
