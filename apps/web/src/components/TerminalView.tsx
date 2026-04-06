@@ -13,13 +13,14 @@ interface TerminalViewProps {
 }
 
 export function TerminalView({ worktreePath }: TerminalViewProps) {
-  const { 
+  const {
     getActiveProject,
     setSelectedWorktree,
     terminalSessions,
     addTerminalSession,
     removeTerminalSession,
-    theme
+    theme,
+    terminalSettings
   } = useAppStore();
   
   const activeProject = getActiveProject();
@@ -482,8 +483,11 @@ export function TerminalView({ worktreePath }: TerminalViewProps) {
               onReady={handleTerminalReady}
               config={{
                 theme: theme,
-                fontSize: 14,
-                cursorBlink: true
+                fontSize: terminalSettings?.fontSize ?? 14,
+                cursorBlink: terminalSettings?.cursorBlink ?? true,
+                scrollback: terminalSettings?.scrollback,
+                fontFamily: terminalSettings?.fontFamily,
+                tabStopWidth: terminalSettings?.tabStopWidth,
               }}
             />
           )}
@@ -503,8 +507,11 @@ export function TerminalView({ worktreePath }: TerminalViewProps) {
                 onReady={handleSplitTerminalReady}
                 config={{
                   theme: theme,
-                  fontSize: 14,
-                  cursorBlink: true
+                  fontSize: terminalSettings?.fontSize ?? 14,
+                  cursorBlink: terminalSettings?.cursorBlink ?? true,
+                  scrollback: terminalSettings?.scrollback,
+                  fontFamily: terminalSettings?.fontFamily,
+                  tabStopWidth: terminalSettings?.tabStopWidth,
                 }}
               />
             )}

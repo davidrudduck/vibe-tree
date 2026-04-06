@@ -1,7 +1,7 @@
 import { useAppStore } from '../store';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { ChevronLeft, GitBranch, RefreshCw, Plus } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 interface WorktreePanelProps {
   projectId: string;
@@ -19,9 +19,32 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
   const [loading, setLoading] = useState(false);
   const [showNewBranchDialog, setShowNewBranchDialog] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [_aheadBehind, setAheadBehind] = useState<Map<string, { ahead: number; behind: number }>>(new Map());
   
   const project = getProject(projectId);
   const adapter = getAdapter(); // Get adapter once per render
+
+  const fetchAheadBehind = useCallback(async () => {
+    const adapter = getAdapter();
+    if (!adapter || !project) return;
+    try {
+      const results = new Map<string, { ahead: number; behind: number }>();
+      await Promise.all(
+        (project.worktrees || []).map(async (wt) => {
+          try {
+            const ab = await adapter.getAheadBehind(wt.path);
+            results.set(wt.path, ab);
+          } catch {
+            results.set(wt.path, { ahead: 0, behind: 0 });
+          }
+        })
+      );
+      setAheadBehind(results);
+    } catch {
+      // Failed to fetch ahead/behind — leave badges empty
+    }
+  }, [getAdapter, project]);
 
   const handleRefresh = async () => {
     const adapter = getAdapter();
@@ -31,6 +54,7 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
     try {
       const trees = await adapter.listWorktrees(project.path);
       updateProjectWorktrees(projectId, trees);
+      await fetchAheadBehind();
     } catch (error) {
       console.error('Failed to refresh worktrees:', error);
     } finally {
@@ -59,19 +83,21 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
     try {
       const result = await adapter.addWorktree(project.path, newBranchName);
       console.log('✅ Created worktree:', result);
-      
+
       setShowNewBranchDialog(false);
       setNewBranchName('');
-      
+      setCreateError(null);
+
       // Refresh worktrees to show the new one
       const trees = await adapter.listWorktrees(project.path);
       updateProjectWorktrees(projectId, trees);
-      
+      await fetchAheadBehind();
+
       // Select the newly created worktree
       setSelectedWorktree(projectId, result.path);
     } catch (error) {
       console.error('❌ Failed to create worktree:', error);
-      // TODO: Add toast notification for error
+      setCreateError((error as Error).message || 'Failed to create worktree');
     } finally {
       setLoading(false);
     }
@@ -109,6 +135,7 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
         console.log('✅ Worktrees loaded:', trees);
         updateProjectWorktrees(projectId, trees);
         console.log('✅ Project worktrees updated');
+        await fetchAheadBehind();
       } catch (error) {
         console.error('❌ Failed to load worktrees:', error);
       } finally {
@@ -118,7 +145,7 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
     };
     
     loadWorktrees();
-  }, [projectId, connected, adapter?.constructor?.name]); // Stable dependency on adapter presence
+  }, [projectId, connected, adapter?.constructor?.name, fetchAheadBehind]); // Stable dependency on adapter presence
   
   if (!project) {
     return <div className="flex-1 flex items-center justify-center text-muted-foreground">Project not found</div>;
@@ -149,7 +176,7 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
-            onClick={() => setShowNewBranchDialog(true)}
+            onClick={() => { setShowNewBranchDialog(true); setCreateError(null); }}
             disabled={!connected}
             className="p-1 hover:bg-accent rounded disabled:opacity-50"
           >
@@ -260,6 +287,7 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
                   onClick={() => {
                     setShowNewBranchDialog(false);
                     setNewBranchName('');
+                    setCreateError(null);
                   }}
                   className="px-4 py-2 text-sm border border-border rounded-md hover:bg-accent"
                 >
@@ -273,6 +301,9 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
                   {loading ? 'Creating...' : 'Create Branch'}
                 </button>
               </div>
+              {createError && (
+                <p className="text-xs text-red-400 mt-2">{createError}</p>
+              )}
             </div>
           </div>
         </div>

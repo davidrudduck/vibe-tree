@@ -8,6 +8,7 @@ interface SettingsDialogProps {
   adapter: SettingsAdapter;
   open: boolean;
   onClose: () => void;
+  onSettingsChange?: (settings: TerminalSettings) => void;
 }
 
 type ActiveTab = 'terminal' | 'general';
@@ -95,7 +96,7 @@ const errorStyle: React.CSSProperties = {
   marginTop: '4px',
 };
 
-export function SettingsDialog({ adapter, open, onClose }: SettingsDialogProps) {
+export function SettingsDialog({ adapter, open, onClose, onSettingsChange }: SettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<ActiveTab>('terminal');
   const [settings, setSettings] = useState<TerminalSettings>(DEFAULT_TERMINAL_SETTINGS);
   const [worktreeBasePath, setWorktreeBasePath] = useState<string>('');
@@ -136,12 +137,13 @@ export function SettingsDialog({ adapter, open, onClose }: SettingsDialogProps) 
         try {
           const updated = await adapter.updateTerminalSettings({ [key]: value });
           setSettings(updated);
+          onSettingsChange?.(updated);
         } catch (err) {
           console.error('Failed to save terminal settings:', err);
         }
       }, 500);
     },
-    [adapter],
+    [adapter, onSettingsChange],
   );
 
   const handleSaveWorktreePath = useCallback(async () => {

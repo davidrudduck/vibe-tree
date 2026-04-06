@@ -22,10 +22,19 @@ interface AppState {
   
   // Terminal state
   terminalSessions: Map<string, string>; // worktreePath -> sessionId
-  
+
+  // Terminal settings state
+  terminalSettings: {
+    fontSize: number;
+    cursorBlink: boolean;
+    scrollback: number;
+    fontFamily: string;
+    tabStopWidth: number;
+  } | null;
+
   // Theme state
   theme: 'light' | 'dark';
-  
+
   // Actions
   setConnected: (connected: boolean) => void;
   setConnecting: (connecting: boolean) => void;
@@ -42,6 +51,7 @@ interface AppState {
   addTerminalSession: (worktreePath: string, sessionId: string) => void;
   removeTerminalSession: (worktreePath: string) => void;
   setTheme: (theme: 'light' | 'dark') => void;
+  setTerminalSettings: (settings: any) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -60,7 +70,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   })(),
   theme: 'light',
-  
+  terminalSettings: null,
+
   // Actions
   setConnected: (connected) => set({ connected }),
   setConnecting: (connecting) => set({ connecting }),
@@ -197,4 +208,5 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
     
   setTheme: (theme) => set({ theme }),
+  setTerminalSettings: (settings) => set({ terminalSettings: settings }),
 }));

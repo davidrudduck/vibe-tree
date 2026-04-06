@@ -19,7 +19,7 @@ const settingsAdapter = new RestSettingsAdapter();
 
 function App() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const { projects, activeProjectId, addProject, addProjects, removeProject, setActiveProject, setSelectedTab, theme, setTheme, connected } = useAppStore();
+  const { projects, activeProjectId, addProject, addProjects, removeProject, setActiveProject, setSelectedTab, theme, setTheme, connected, setTerminalSettings } = useAppStore();
   const { connect } = useWebSocket();
   const [showProjectSelector, setShowProjectSelector] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -34,6 +34,15 @@ function App() {
     // Auto-connect on mount
     connect();
   }, []);
+
+  // Fetch terminal settings when connected
+  useEffect(() => {
+    if (!connected) return;
+    const adapter = new RestSettingsAdapter();
+    adapter.getTerminalSettings()
+      .then(setTerminalSettings)
+      .catch(() => {});
+  }, [connected]);
 
   // Auto-load projects when connection is established
   useEffect(() => {
@@ -230,6 +239,7 @@ function App() {
             adapter={settingsAdapter}
             open={showSettings}
             onClose={() => setShowSettings(false)}
+            onSettingsChange={setTerminalSettings}
           />
           {showSessionPanel && activeProjectId && (
             <SessionPanel
