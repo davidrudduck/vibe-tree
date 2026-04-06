@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { Worktree } from '@vibetree/core';
+import type { TerminalSettings } from '@vibetree/ui';
 
 interface Project {
   id: string;
@@ -25,7 +26,10 @@ interface AppState {
   
   // Theme state
   theme: 'light' | 'dark';
-  
+
+  // Terminal settings state
+  terminalSettings: TerminalSettings | null;
+
   // Actions
   setConnected: (connected: boolean) => void;
   setConnecting: (connecting: boolean) => void;
@@ -42,6 +46,7 @@ interface AppState {
   addTerminalSession: (worktreePath: string, sessionId: string) => void;
   removeTerminalSession: (worktreePath: string) => void;
   setTheme: (theme: 'light' | 'dark') => void;
+  setTerminalSettings: (settings: TerminalSettings) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -60,7 +65,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   })(),
   theme: 'light',
-  
+  terminalSettings: null,
+
   // Actions
   setConnected: (connected) => set({ connected }),
   setConnecting: (connecting) => set({ connecting }),
@@ -197,4 +203,5 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
     
   setTheme: (theme) => set({ theme }),
+  setTerminalSettings: (settings) => set({ terminalSettings: settings }),
 }));

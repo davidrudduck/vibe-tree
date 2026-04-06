@@ -19,6 +19,7 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
   const [loading, setLoading] = useState(false);
   const [showNewBranchDialog, setShowNewBranchDialog] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
+  const [createError, setCreateError] = useState<string | null>(null);
   const [aheadBehind, setAheadBehind] = useState<Map<string, { ahead: number; behind: number }>>(new Map());
 
   const [branches, setBranches] = useState<{ name: string; current: boolean; remote: boolean }[]>([]);
@@ -35,6 +36,19 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
     try {
       const trees = await adapter.listWorktrees(project.path);
       updateProjectWorktrees(projectId, trees);
+
+      // Refresh ahead/behind
+      try {
+        const mainBranch = await adapter.getMainBranchName(project.path).catch(() => 'main');
+        const results = new Map<string, { ahead: number; behind: number }>();
+        await Promise.all(trees.map(async (wt) => {
+          try {
+            const ab = await adapter.getAheadBehind(wt.path, mainBranch);
+            results.set(wt.path, ab);
+          } catch { results.set(wt.path, { ahead: 0, behind: 0 }); }
+        }));
+        setAheadBehind(results);
+      } catch {}
     } catch (error) {
       console.error('Failed to refresh worktrees:', error);
     } finally {
@@ -59,6 +73,7 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
     const adapter = getAdapter();
     if (!newBranchName.trim() || !adapter || !connected || !project) return;
 
+    setCreateError(null);
     setLoading(true);
     try {
       const result = await adapter.addWorktree(project.path, newBranchName, startPoint || undefined);
@@ -73,11 +88,24 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
       const trees = await adapter.listWorktrees(project.path);
       updateProjectWorktrees(projectId, trees);
 
+      // Refresh ahead/behind
+      try {
+        const mainBranch = await adapter.getMainBranchName(project.path).catch(() => 'main');
+        const results = new Map<string, { ahead: number; behind: number }>();
+        await Promise.all(trees.map(async (wt) => {
+          try {
+            const ab = await adapter.getAheadBehind(wt.path, mainBranch);
+            results.set(wt.path, ab);
+          } catch { results.set(wt.path, { ahead: 0, behind: 0 }); }
+        }));
+        setAheadBehind(results);
+      } catch {}
+
       // Select the newly created worktree
       setSelectedWorktree(projectId, result.path);
     } catch (error) {
       console.error('❌ Failed to create worktree:', error);
-      // TODO: Add toast notification for error
+      setCreateError((error as Error).message || 'Failed to create worktree');
     } finally {
       setLoading(false);
     }
@@ -178,7 +206,7 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
-            onClick={() => setShowNewBranchDialog(true)}
+            onClick={() => { setShowNewBranchDialog(true); setCreateError(null); }}
             disabled={!connected}
             className="p-1 hover:bg-accent rounded disabled:opacity-50"
           >
@@ -295,6 +323,7 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
                     setNewBranchName('');
                     setStartPoint('');
                     setBranches([]);
+                    setCreateError(null);
                   }
                 }}
                 className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring"
@@ -316,7 +345,9 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
                   ))}
                   <optgroup label="Remote">
                     {branches.filter(b => b.remote).map(b => (
-                      <option key={b.name} value={b.name}>{b.name}</option>
+                      <option key={b.name} value={b.name}>
+                        {b.name.replace(/^origin\//, '')} (remote)
+                      </option>
                     ))}
                   </optgroup>
                 </select>
@@ -329,6 +360,7 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
                     setNewBranchName('');
                     setStartPoint('');
                     setBranches([]);
+                    setCreateError(null);
                   }}
                   className="px-4 py-2 text-sm border border-border rounded-md hover:bg-accent"
                 >
@@ -342,6 +374,7 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
                   {loading ? 'Creating...' : 'Create Branch'}
                 </button>
               </div>
+              {createError && <p className="text-xs text-red-400 mt-2">{createError}</p>}
             </div>
           </div>
         </div>
