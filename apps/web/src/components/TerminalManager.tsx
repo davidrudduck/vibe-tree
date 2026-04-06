@@ -64,8 +64,10 @@ export function TerminalManager({ worktrees, selectedWorktree }: TerminalManager
         terminalsToRemove.forEach((path) => next.delete(path));
         return next;
       });
+      // Clean up persisted sessions for removed worktrees
+      terminalsToRemove.forEach((path) => removeTerminalSession(path));
     }
-  }, [worktrees]);
+  }, [worktrees, removeTerminalSession]);
 
   const handleStartTerminal = (worktreePath: string) => {
     setActiveTerminals((prev) => new Set(prev).add(worktreePath));
