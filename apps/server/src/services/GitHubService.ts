@@ -58,8 +58,8 @@ export class GitHubService {
   static getInstance(): GitHubService {
     if (!GitHubService.instance) {
       GitHubService.instance = new GitHubService();
+      GitHubService.instance.refreshToken();
     }
-    GitHubService.instance.refreshToken();
     return GitHubService.instance;
   }
 

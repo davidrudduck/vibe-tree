@@ -29,7 +29,7 @@ export interface SettingsAdapter {
   resetTerminalSettings(): Promise<TerminalSettings>;
   getWorktreeBasePath(): Promise<string | null>;
   setWorktreeBasePath(path: string): Promise<void>;
-  getGitHubToken(): Promise<string | null>;
+  getGitHubToken(): Promise<{ configured: boolean; masked: string | null }>;
   setGitHubToken(token: string): Promise<void>;
   getProjects(): Promise<Project[]>;
   removeProject(path: string): Promise<void>;

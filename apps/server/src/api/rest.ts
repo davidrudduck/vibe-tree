@@ -433,11 +433,14 @@ export function setupRestRoutes(app: Express, services: Services) {
 
   // GitHub token setting endpoints (protected) — must be before generic /:category/:key routes
 
-  // Get GitHub token (returns masked value or null)
+  // Get GitHub token status (never returns the raw token)
   app.get('/api/settings/general/githubToken', authService.requireAuth, (req, res) => {
     try {
       const value = databaseService.settings.get<string>('general', 'githubToken');
-      res.json({ value: value ?? null });
+      res.json({
+        configured: !!value,
+        masked: value ? `${'*'.repeat(Math.max(0, value.length - 4))}${value.slice(-4)}` : null,
+      });
     } catch (error) {
       res.status(500).json({ error: (error as Error).message });
     }

@@ -106,7 +106,8 @@ export function SettingsDialog({ adapter, open, onClose, onSettingsChange }: Set
 
   // GitHub token state
   const [githubToken, setGithubToken] = useState<string>('');
-  const [githubTokenSaved, setGithubTokenSaved] = useState<string | null>(null);
+  const [githubTokenConfigured, setGithubTokenConfigured] = useState(false);
+  const [githubTokenMasked, setGithubTokenMasked] = useState<string | null>(null);
   const [githubTokenSaving, setGithubTokenSaving] = useState(false);
   const [githubTokenError, setGithubTokenError] = useState<string | null>(null);
 
@@ -128,8 +129,9 @@ export function SettingsDialog({ adapter, open, onClose, onSettingsChange }: Set
     }).catch((err) => {
       console.error('Failed to load worktree base path:', err);
     });
-    adapter.getGitHubToken().then((token) => {
-      setGithubTokenSaved(token);
+    adapter.getGitHubToken().then((result) => {
+      setGithubTokenConfigured(result.configured);
+      setGithubTokenMasked(result.masked);
       setGithubToken('');
     }).catch((err) => {
       console.error('Failed to load GitHub token:', err);
@@ -193,7 +195,7 @@ export function SettingsDialog({ adapter, open, onClose, onSettingsChange }: Set
     setGithubTokenError(null);
     try {
       await adapter.setGitHubToken(githubToken);
-      setGithubTokenSaved(githubToken || null);
+      setGithubTokenConfigured(true);
       setGithubToken('');
     } catch (err) {
       setGithubTokenError(err instanceof Error ? err.message : 'Failed to save');
@@ -359,7 +361,7 @@ export function SettingsDialog({ adapter, open, onClose, onSettingsChange }: Set
                 </label>
                 <div style={{ fontSize: '12px', marginBottom: '8px', color: 'var(--text-secondary, #858585)' }}>
                   Status:{' '}
-                  {githubTokenSaved ? (
+                  {githubTokenConfigured ? (
                     <span style={{ color: '#4caf50' }}>Configured</span>
                   ) : (
                     <span style={{ color: 'var(--text-secondary, #858585)' }}>Not configured</span>
@@ -370,7 +372,7 @@ export function SettingsDialog({ adapter, open, onClose, onSettingsChange }: Set
                     type="password"
                     value={githubToken}
                     onChange={(e) => { setGithubToken(e.target.value); setGithubTokenError(null); }}
-                    placeholder={githubTokenSaved ? '••••••••••••••••' : 'ghp_...'}
+                    placeholder={githubTokenConfigured ? '••••••••••••••••' : 'ghp_...'}
                     style={{ ...inputStyle, flex: 1, width: 'auto' }}
                   />
                   <button

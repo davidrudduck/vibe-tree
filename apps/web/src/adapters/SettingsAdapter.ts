@@ -45,9 +45,8 @@ export class RestSettingsAdapter implements SettingsAdapter {
     });
   }
 
-  async getGitHubToken(): Promise<string | null> {
-    const data = await this.fetchJson<{ value: string | null }>('/api/settings/general/githubToken');
-    return data.value;
+  async getGitHubToken(): Promise<{ configured: boolean; masked: string | null }> {
+    return this.fetchJson('/api/settings/general/githubToken');
   }
 
   async setGitHubToken(token: string): Promise<void> {
