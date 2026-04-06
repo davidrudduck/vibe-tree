@@ -25,7 +25,8 @@ function App() {
   const {
     projects, activeProjectId, addProject, addProjects, removeProject,
     setActiveProject, setSelectedWorktree, setSelectedTab,
-    theme, setTheme, connected, setTerminalSettings, terminalSessions
+    theme, setTheme, connected, setTerminalSettings, terminalSessions,
+    removeWorktreeFromProject, removeTerminalSession
   } = useAppStore();
   const { connect } = useWebSocket();
 
@@ -380,6 +381,17 @@ function App() {
                 <TerminalManager
                   worktrees={activeProject?.worktrees ?? []}
                   selectedWorktree={activeProject?.selectedWorktree ?? null}
+                  projectPath={activeProject?.path ?? ''}
+                  mainWorktreePath={activeProject?.worktrees.find(wt => {
+                    const b = (wt.branch ?? '').replace('refs/heads/', '');
+                    return b === 'main' || b === 'master';
+                  })?.path ?? activeProject?.path ?? ''}
+                  onWorktreeRemoved={() => {
+                    if (activeProjectId && activeProject?.selectedWorktree) {
+                      removeWorktreeFromProject(activeProjectId, activeProject.selectedWorktree);
+                      removeTerminalSession(activeProject.selectedWorktree);
+                    }
+                  }}
                 />
               </div>
               <div className={`absolute inset-0 ${selectedTab === 'changes' ? 'block' : 'hidden'}`}>

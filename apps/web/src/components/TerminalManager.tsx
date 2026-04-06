@@ -6,9 +6,12 @@ import { useAppStore } from '../store';
 interface TerminalManagerProps {
   worktrees: Array<{ path: string; branch?: string; head: string }>;
   selectedWorktree: string | null;
+  projectPath: string;
+  mainWorktreePath: string;
+  onWorktreeRemoved?: () => void;
 }
 
-export function TerminalManager({ worktrees, selectedWorktree }: TerminalManagerProps) {
+export function TerminalManager({ worktrees, selectedWorktree, projectPath, mainWorktreePath, onWorktreeRemoved }: TerminalManagerProps) {
   const { terminalSessions, removeTerminalSession } = useAppStore();
   const [mountedTerminals, setMountedTerminals] = useState<Set<string>>(new Set());
   const [activeTerminals, setActiveTerminals] = useState<Set<string>>(new Set());
@@ -107,8 +110,11 @@ export function TerminalManager({ worktrees, selectedWorktree }: TerminalManager
         <WorktreeInfo
           worktreePath={selectedWorktree}
           branch={selectedWorktreeData?.branch ?? selectedWorktreeData?.head.substring(0, 8) ?? ''}
+          projectPath={projectPath}
+          mainWorktreePath={mainWorktreePath}
           onStartTerminal={() => handleStartTerminal(selectedWorktree)}
           onReconnect={() => handleStartTerminal(selectedWorktree)}
+          onWorktreeRemoved={onWorktreeRemoved}
         />
       )}
 

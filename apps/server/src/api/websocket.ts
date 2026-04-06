@@ -12,7 +12,9 @@ import {
   removeWorktree,
   getAheadBehind,
   getDiffVsMain,
-  getMainBranchName
+  getMainBranchName,
+  mergeBranch,
+  hasUncommittedChanges
 } from '@vibetree/core';
 
 interface Services {
@@ -541,6 +543,128 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
                 type: 'error',
                 payload: { error: (error as Error).message },
                 id: message.id
+              }));
+            }
+            break;
+          }
+
+          case 'session:link': {
+            try {
+              const { tmuxSessionName, projectPath, worktreePath } = message.payload;
+              const sessionId = `ext-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+              const session = databaseService.terminalSessions.upsert({
+                id: sessionId,
+                projectPath,
+                worktreePath,
+                tmuxSessionName,
+                status: 'active',
+                isExternal: true,
+              });
+              ws.send(JSON.stringify({
+                type: 'session:link:response',
+                payload: { success: true, session },
+                id: message.id,
+              }));
+            } catch (error) {
+              ws.send(JSON.stringify({
+                type: 'error',
+                payload: { error: (error as Error).message },
+                id: message.id,
+              }));
+            }
+            break;
+          }
+
+          case 'session:reassign': {
+            try {
+              const { sessionId, newWorktreePath } = message.payload;
+              const session = databaseService.terminalSessions.findById(sessionId);
+              if (!session) throw new Error('Session not found');
+              const updated = databaseService.terminalSessions.updateWorktreePath(sessionId, newWorktreePath);
+              if (!updated) throw new Error('Failed to update session');
+              ws.send(JSON.stringify({
+                type: 'session:reassign:response',
+                payload: { success: true },
+                id: message.id,
+              }));
+            } catch (error) {
+              ws.send(JSON.stringify({
+                type: 'error',
+                payload: { error: (error as Error).message },
+                id: message.id,
+              }));
+            }
+            break;
+          }
+
+          case 'git:merge-to-main': {
+            try {
+              const { branchName, mainWorktreePath } = message.payload;
+              const dirty = await hasUncommittedChanges(mainWorktreePath);
+              if (dirty) {
+                ws.send(JSON.stringify({
+                  type: 'git:merge-to-main:response',
+                  payload: { success: false, error: 'Main worktree has uncommitted changes. Commit or stash them first.' },
+                  id: message.id,
+                }));
+                break;
+              }
+              const output = await mergeBranch(mainWorktreePath, branchName);
+              ws.send(JSON.stringify({
+                type: 'git:merge-to-main:response',
+                payload: { success: true, output },
+                id: message.id,
+              }));
+            } catch (error) {
+              ws.send(JSON.stringify({
+                type: 'git:merge-to-main:response',
+                payload: { success: false, error: (error as Error).message },
+                id: message.id,
+              }));
+            }
+            break;
+          }
+
+          case 'git:worktree:cleanup': {
+            try {
+              const { projectPath, worktreePath, branchName, force } = message.payload;
+              let dirty = false;
+              try {
+                dirty = await hasUncommittedChanges(worktreePath);
+              } catch {
+                // worktree may already be partially removed
+              }
+              if (dirty && !force) {
+                ws.send(JSON.stringify({
+                  type: 'git:worktree:cleanup:response',
+                  payload: { success: false, error: 'Worktree has uncommitted changes. Enable force to remove anyway.', dirty: true },
+                  id: message.id,
+                }));
+                break;
+              }
+              // Kill attached tmux sessions
+              const sessionsForWorktree = databaseService.terminalSessions.findByWorktree(worktreePath);
+              for (const session of sessionsForWorktree) {
+                try {
+                  const { execSync } = require('child_process');
+                  execSync(`tmux kill-session -t ${JSON.stringify(session.tmuxSessionName)}`, { encoding: 'utf8' });
+                } catch {
+                  // session may already be dead
+                }
+                databaseService.terminalSessions.delete(session.id);
+              }
+              // Remove the worktree
+              const result = await removeWorktree(projectPath, worktreePath, branchName, force ?? false);
+              ws.send(JSON.stringify({
+                type: 'git:worktree:cleanup:response',
+                payload: result,
+                id: message.id,
+              }));
+            } catch (error) {
+              ws.send(JSON.stringify({
+                type: 'git:worktree:cleanup:response',
+                payload: { success: false, error: (error as Error).message },
+                id: message.id,
               }));
             }
             break;

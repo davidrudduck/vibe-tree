@@ -393,3 +393,23 @@ export async function validateProjects(projectPaths: string[]): Promise<ProjectV
     }
   });
 }
+
+/**
+ * Merge a branch into the current branch of the given worktree
+ * @param worktreePath - Path to the worktree where the merge executes (typically the main worktree)
+ * @param branchName - Name of the branch to merge
+ * @returns Git merge output as string
+ */
+export async function mergeBranch(worktreePath: string, branchName: string): Promise<string> {
+  return executeGitCommand(['merge', branchName, '--no-edit'], worktreePath);
+}
+
+/**
+ * Check if a worktree has uncommitted changes
+ * @param worktreePath - Path to the git worktree
+ * @returns true if there are uncommitted changes
+ */
+export async function hasUncommittedChanges(worktreePath: string): Promise<boolean> {
+  const status = await getGitStatus(worktreePath);
+  return status.length > 0;
+}

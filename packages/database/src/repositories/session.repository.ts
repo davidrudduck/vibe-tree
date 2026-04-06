@@ -14,6 +14,7 @@ export class SessionRepository {
     worktreePath: string;
     tmuxSessionName: string;
     status?: string;
+    isExternal?: boolean;
   }): TerminalSession {
     const now = new Date();
 
@@ -25,6 +26,7 @@ export class SessionRepository {
         worktreePath: data.worktreePath,
         tmuxSessionName: data.tmuxSessionName,
         status: data.status ?? 'active',
+        isExternal: data.isExternal ?? false,
         createdAt: now,
         lastActivity: now,
       })
@@ -35,6 +37,7 @@ export class SessionRepository {
           worktreePath: data.worktreePath,
           tmuxSessionName: data.tmuxSessionName,
           status: data.status ?? 'active',
+          isExternal: data.isExternal ?? false,
           lastActivity: now,
         },
       })
@@ -92,6 +95,17 @@ export class SessionRepository {
   }
 
   /**
+   * Find a session by its ID
+   */
+  findById(id: string): TerminalSession | undefined {
+    return this.db
+      .select()
+      .from(terminalSessions)
+      .where(eq(terminalSessions.id, id))
+      .get();
+  }
+
+  /**
    * Update session status
    */
   updateStatus(id: string, status: string): boolean {
@@ -110,6 +124,18 @@ export class SessionRepository {
     const result = this.db
       .update(terminalSessions)
       .set({ lastActivity: new Date() })
+      .where(eq(terminalSessions.id, id))
+      .run();
+    return result.changes > 0;
+  }
+
+  /**
+   * Update worktree path for a session
+   */
+  updateWorktreePath(id: string, worktreePath: string): boolean {
+    const result = this.db
+      .update(terminalSessions)
+      .set({ worktreePath, lastActivity: new Date() })
       .where(eq(terminalSessions.id, id))
       .run();
     return result.changes > 0;

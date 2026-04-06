@@ -525,6 +525,22 @@ export class WebSocketAdapter extends BaseAdapter {
     };
   }
 
+  async linkSession(tmuxSessionName: string, projectPath: string, worktreePath: string): Promise<{ success: boolean; session: any }> {
+    return this.sendMessage('session:link', { tmuxSessionName, projectPath, worktreePath });
+  }
+
+  async reassignSession(sessionId: string, newWorktreePath: string): Promise<{ success: boolean }> {
+    return this.sendMessage('session:reassign', { sessionId, newWorktreePath });
+  }
+
+  async mergeToMain(projectPath: string, branchName: string, mainWorktreePath: string): Promise<{ success: boolean; output?: string; error?: string }> {
+    return this.sendMessage('git:merge-to-main', { projectPath, branchName, mainWorktreePath });
+  }
+
+  async cleanupWorktree(projectPath: string, worktreePath: string, branchName: string, force?: boolean): Promise<{ success: boolean; warning?: string; error?: string; dirty?: boolean }> {
+    return this.sendMessage('git:worktree:cleanup', { projectPath, worktreePath, branchName, force });
+  }
+
   disconnect(): void {
     if (this.ws) {
       this.ws.close();
