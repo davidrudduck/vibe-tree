@@ -140,7 +140,8 @@ export function TerminalView({ worktreePath }: TerminalViewProps) {
       cleanupRef.current.forEach(cleanup => cleanup());
       cleanupRef.current = [];
     };
-  }, [selectedWorktree, getAdapter, terminalSessions, addTerminalSession, removeTerminalSession]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedWorktree, getAdapter]);
 
   // Cleanup split terminal on unmount
   useEffect(() => {

@@ -141,7 +141,7 @@ export function SessionPanel({ projectPath, onClose }: SessionPanelProps) {
     if (!adapter) return;
     setTerminatingIds((prev) => new Set(prev).add(sessionId));
     try {
-      await adapter.terminateSession(sessionId);
+      await (adapter as any).sendMessage('shell:terminate', { sessionId });
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
     } catch (err) {
       console.error('Failed to terminate session:', err);
@@ -167,7 +167,7 @@ export function SessionPanel({ projectPath, onClose }: SessionPanelProps) {
               disabled={loading}
               aria-label="Refresh sessions"
             >
-              <RefreshCw size={14} style={loading ? { animation: 'spin 1s linear infinite' } : {}} />
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             </button>
             <button style={iconBtnStyle} onClick={onClose} aria-label="Close session panel">
               <X size={14} />
