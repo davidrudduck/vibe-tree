@@ -51,8 +51,12 @@ export class GitHubService {
   }
 
   refreshToken(): void {
-    const dbToken = databaseService.settings.get<string>('general', 'githubToken');
-    this.token = dbToken || process.env.GITHUB_TOKEN || process.env.GH_TOKEN || null;
+    try {
+      const dbToken = databaseService.settings.get<string>('general', 'githubToken');
+      this.token = dbToken || process.env.GITHUB_TOKEN || process.env.GH_TOKEN || null;
+    } catch {
+      this.token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || null;
+    }
   }
 
   static getInstance(): GitHubService {
