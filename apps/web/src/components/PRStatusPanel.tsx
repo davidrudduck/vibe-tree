@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { GitPullRequest, X, RefreshCw } from 'lucide-react';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { WebSocketAdapter } from '../adapters/WebSocketAdapter';
@@ -80,18 +80,26 @@ export function PRStatusPanel({ projectPath, onClose }: PRStatusPanelProps) {
   const [cache, setCache] = useState<{ prs: PullRequest[]; fetchedAt: number } | null>(null);
   const [usingCache, setUsingCache] = useState(false);
 
+  // Use refs for cache/status to avoid dependency loop in fetchData
+  const githubStatusRef = useRef(githubStatus);
+  const cacheRef = useRef(cache);
+  githubStatusRef.current = githubStatus;
+  cacheRef.current = cache;
+
   const fetchData = useCallback(async () => {
     const adapter = getAdapter() as WebSocketAdapter | null;
     if (!adapter) return;
 
     // Skip fetch if rate limit is low and cache is fresh
+    const currentStatus = githubStatusRef.current;
+    const currentCache = cacheRef.current;
     if (
-      githubStatus?.rateLimit &&
-      githubStatus.rateLimit.remaining < RATE_LIMIT_THRESHOLD &&
-      cache &&
-      Date.now() - cache.fetchedAt < CACHE_TTL_MS
+      currentStatus?.rateLimit &&
+      currentStatus.rateLimit.remaining < RATE_LIMIT_THRESHOLD &&
+      currentCache &&
+      Date.now() - currentCache.fetchedAt < CACHE_TTL_MS
     ) {
-      setPrs(cache.prs);
+      setPrs(currentCache.prs);
       setUsingCache(true);
       return;
     }
@@ -113,14 +121,15 @@ export function PRStatusPanel({ projectPath, onClose }: PRStatusPanelProps) {
       console.error('Failed to fetch PR data:', err);
       setError((err as Error).message || 'Failed to fetch pull requests');
       // Fall back to cache if available
-      if (cache) {
-        setPrs(cache.prs);
+      const fallbackCache = cacheRef.current;
+      if (fallbackCache) {
+        setPrs(fallbackCache.prs);
         setUsingCache(true);
       }
     } finally {
       setLoading(false);
     }
-  }, [getAdapter, projectPath, githubStatus, cache]);
+  }, [getAdapter, projectPath]);
 
   useEffect(() => {
     fetchData();

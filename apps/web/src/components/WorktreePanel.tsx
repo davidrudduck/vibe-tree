@@ -71,7 +71,7 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
 
   const handleCreateBranch = async () => {
     const adapter = getAdapter();
-    if (!newBranchName.trim() || !adapter || !connected || !project) return;
+    if (!newBranchName.trim() || !adapter || !connected || !project || loading) return;
 
     setCreateError(null);
     setLoading(true);
