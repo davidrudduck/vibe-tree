@@ -69,11 +69,16 @@ export function TerminalManager({ worktrees, selectedWorktree }: TerminalManager
 
   const handleStartTerminal = (worktreePath: string) => {
     setActiveTerminals((prev) => new Set(prev).add(worktreePath));
-    // TerminalView will be mounted by the effect above on the next render
     if (!mountedTerminals.has(worktreePath)) {
       setMountedTerminals((prev) => new Set(prev).add(worktreePath));
       createdTerminals.current.add(worktreePath);
     }
+  };
+
+  const handleCloseTerminal = (worktreePath: string) => {
+    setActiveTerminals((prev) => { const n = new Set(prev); n.delete(worktreePath); return n; });
+    setMountedTerminals((prev) => { const n = new Set(prev); n.delete(worktreePath); return n; });
+    createdTerminals.current.delete(worktreePath);
   };
 
   if (!selectedWorktree) {
@@ -118,7 +123,11 @@ export function TerminalManager({ worktrees, selectedWorktree }: TerminalManager
             height: '100%',
           }}
         >
-          <TerminalView worktreePath={worktreePath} />
+          <TerminalView
+            worktreePath={worktreePath}
+            onClose={() => handleCloseTerminal(worktreePath)}
+            onExited={() => {}}
+          />
         </div>
       ))}
     </div>

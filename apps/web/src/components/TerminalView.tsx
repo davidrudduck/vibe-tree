@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@vibetree/ui';
 import { useAppStore } from '../store';
 import { useWebSocket } from '../hooks/useWebSocket';
-import { ChevronLeft, Maximize2, Minimize2, Columns2, X } from 'lucide-react';
+import { ChevronLeft, Maximize2, Minimize2, Columns2, X, Power } from 'lucide-react';
 import type { Terminal as XTerm } from '@xterm/xterm';
 
 // Cache for terminal states per session ID (like desktop app)
@@ -10,9 +10,11 @@ const terminalStateCache = new Map<string, string>();
 
 interface TerminalViewProps {
   worktreePath: string;
+  onClose?: () => void;
+  onExited?: () => void;
 }
 
-export function TerminalView({ worktreePath }: TerminalViewProps) {
+export function TerminalView({ worktreePath, onClose, onExited }: TerminalViewProps) {
   const {
     getActiveProject,
     setSelectedWorktree,
@@ -30,6 +32,7 @@ export function TerminalView({ worktreePath }: TerminalViewProps) {
   const [splitSessionId, setSplitSessionId] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSplit, setIsSplit] = useState(false);
+  const [exited, setExited] = useState(false);
   const terminalRef = useRef<XTerm | null>(null);
   const splitTerminalRef = useRef<XTerm | null>(null);
   const cleanupRef = useRef<(() => void)[]>([]);
@@ -70,6 +73,8 @@ export function TerminalView({ worktreePath }: TerminalViewProps) {
           });
 
           const unsubscribeExit = adapter.onShellExit(actualSessionId, (code) => {
+            setExited(true);
+            onExited?.();
             if (terminalRef.current) {
               terminalRef.current.write(`\r\n[Process exited with code ${code}]\r\n`);
             }
@@ -424,6 +429,7 @@ export function TerminalView({ worktreePath }: TerminalViewProps) {
               onClick={toggleSplit}
               className="p-1 hover:bg-accent rounded"
               title="Split Terminal"
+              disabled={exited}
             >
               <Columns2 className="h-4 w-4" />
             </button>
@@ -431,12 +437,32 @@ export function TerminalView({ worktreePath }: TerminalViewProps) {
               onClick={toggleFullscreen}
               className="p-1 hover:bg-accent rounded"
               title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+              disabled={exited}
             >
               {isFullscreen ? (
                 <Minimize2 className="h-4 w-4" />
               ) : (
                 <Maximize2 className="h-4 w-4" />
               )}
+            </button>
+            <button
+              onClick={async () => {
+                if (!exited && sessionId) {
+                  const adapter = getAdapter();
+                  if (adapter) {
+                    try {
+                      await (adapter as any).sendMessage('shell:terminate', { sessionId });
+                    } catch {}
+                  }
+                  setExited(true);
+                  onExited?.();
+                }
+                onClose?.();
+              }}
+              className={`p-1 rounded ${exited ? 'hover:bg-red-500/20 text-red-400' : 'hover:bg-accent'}`}
+              title={exited ? "Close Terminal" : "Terminate & Close"}
+            >
+              <Power className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -472,7 +498,20 @@ export function TerminalView({ worktreePath }: TerminalViewProps) {
       </div>
 
       {/* Terminal Container */}
-      <div className={`flex-1 flex ${isSplit ? 'flex-row' : ''} ${theme === 'light' ? 'bg-white' : 'bg-black'}`}>
+      <div className={`flex-1 flex ${isSplit ? 'flex-row' : ''} ${theme === 'light' ? 'bg-white' : 'bg-black'} relative`}>
+        {exited && (
+          <div className="absolute inset-0 bg-black/60 z-10 flex items-center justify-center">
+            <div className="text-center">
+              <p className="text-gray-400 text-sm mb-3">Terminal session ended</p>
+              <button
+                onClick={() => onClose?.()}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded-md transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
         <div className={`${isSplit ? 'w-1/2 border-r' : 'w-full'} h-full`}>
           {sessionId && (
             <Terminal
