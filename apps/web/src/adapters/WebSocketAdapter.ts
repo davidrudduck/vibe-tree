@@ -203,6 +203,10 @@ export class WebSocketAdapter extends BaseAdapter {
     await this.sendMessage('shell:disconnect', { sessionId });
   }
 
+  async terminateSession(sessionId: string): Promise<void> {
+    await this.sendMessage('shell:terminate', { sessionId });
+  }
+
   async startShell(worktreePath: string, cols?: number, rows?: number, forceNew?: boolean): Promise<ShellStartResult> {
     return this.sendMessage('shell:start', { worktreePath, cols, rows, forceNew });
   }
@@ -256,6 +260,11 @@ export class WebSocketAdapter extends BaseAdapter {
 
   async getAheadBehind(worktreePath: string, baseBranch?: string): Promise<{ ahead: number; behind: number }> {
     return this.sendMessage('git:ahead-behind', { worktreePath, baseBranch });
+  }
+
+  async getMainBranchName(projectPath: string): Promise<string> {
+    const result = await this.sendMessage<{ branch: string }>('git:main-branch-name', { projectPath });
+    return result.branch;
   }
 
   async getDiffVsMain(worktreePath: string, baseBranch?: string): Promise<string> {
@@ -463,6 +472,28 @@ export class WebSocketAdapter extends BaseAdapter {
       console.error('Failed to add scheduler history:', error);
       throw error;
     }
+  }
+
+  async getPullRequests(projectPath: string): Promise<any[]> {
+    try {
+      const url = `${this.wsUrl.replace('ws://', 'http://').replace('wss://', 'https://')}/api/projects/${encodeURIComponent(projectPath)}/pulls`;
+      const response = await fetch(url, {
+        headers: this.jwt ? { 'Authorization': `Bearer ${this.jwt}` } : {}
+      });
+      if (!response.ok) return [];
+      return response.json();
+    } catch { return []; }
+  }
+
+  async getGitHubStatus(): Promise<{ configured: boolean; rateLimit?: { remaining: number; reset: number } }> {
+    try {
+      const url = `${this.wsUrl.replace('ws://', 'http://').replace('wss://', 'https://')}/api/github/status`;
+      const response = await fetch(url, {
+        headers: this.jwt ? { 'Authorization': `Bearer ${this.jwt}` } : {}
+      });
+      if (!response.ok) return { configured: false };
+      return response.json();
+    } catch { return { configured: false }; }
   }
 
   async selectDirectory(): Promise<string | undefined> {

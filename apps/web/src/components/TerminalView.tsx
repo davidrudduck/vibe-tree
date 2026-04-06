@@ -4,6 +4,8 @@ import { useAppStore } from '../store';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { ChevronLeft, Maximize2, Minimize2, Columns2, X } from 'lucide-react';
 import type { Terminal as XTerm } from '@xterm/xterm';
+import { RestSettingsAdapter } from '../adapters/SettingsAdapter';
+import type { TerminalSettings } from '@vibetree/ui';
 
 // Cache for terminal states per session ID (like desktop app)
 const terminalStateCache = new Map<string, string>();
@@ -35,6 +37,17 @@ export function TerminalView({ worktreePath }: TerminalViewProps) {
   const splitCleanupRef = useRef<(() => void)[]>([]);
   const saveIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const splitSaveIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [terminalSettings, setTerminalSettings] = useState<TerminalSettings | null>(null);
+
+  // Load terminal settings on mount and poll every 10 seconds for live updates
+  useEffect(() => {
+    const adapter = new RestSettingsAdapter();
+    adapter.getTerminalSettings().then(setTerminalSettings).catch(() => {});
+    const interval = setInterval(() => {
+      adapter.getTerminalSettings().then(setTerminalSettings).catch(() => {});
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (!selectedWorktree) {
@@ -482,8 +495,11 @@ export function TerminalView({ worktreePath }: TerminalViewProps) {
               onReady={handleTerminalReady}
               config={{
                 theme: theme,
-                fontSize: 14,
-                cursorBlink: true
+                fontSize: terminalSettings?.fontSize ?? 14,
+                cursorBlink: terminalSettings?.cursorBlink ?? true,
+                scrollback: terminalSettings?.scrollback ?? 10000,
+                fontFamily: terminalSettings?.fontFamily,
+                tabStopWidth: terminalSettings?.tabStopWidth ?? 4,
               }}
             />
           )}
@@ -503,8 +519,11 @@ export function TerminalView({ worktreePath }: TerminalViewProps) {
                 onReady={handleSplitTerminalReady}
                 config={{
                   theme: theme,
-                  fontSize: 14,
-                  cursorBlink: true
+                  fontSize: terminalSettings?.fontSize ?? 14,
+                  cursorBlink: terminalSettings?.cursorBlink ?? true,
+                  scrollback: terminalSettings?.scrollback ?? 10000,
+                  fontFamily: terminalSettings?.fontFamily,
+                  tabStopWidth: terminalSettings?.tabStopWidth ?? 4,
                 }}
               />
             )}

@@ -340,6 +340,48 @@ export const Terminal: React.FC<TerminalProps> = ({
   }, [terminal, config.theme]);
 
   /**
+   * Live-update fontSize
+   */
+  useEffect(() => {
+    if (!terminal || config.fontSize === undefined) return;
+    terminal.options.fontSize = config.fontSize;
+    fitAddonRef.current?.fit();
+  }, [terminal, config.fontSize]);
+
+  /**
+   * Live-update cursorBlink
+   */
+  useEffect(() => {
+    if (!terminal || config.cursorBlink === undefined) return;
+    terminal.options.cursorBlink = config.cursorBlink;
+  }, [terminal, config.cursorBlink]);
+
+  /**
+   * Live-update scrollback
+   */
+  useEffect(() => {
+    if (!terminal || config.scrollback === undefined) return;
+    terminal.options.scrollback = config.scrollback;
+  }, [terminal, config.scrollback]);
+
+  /**
+   * Live-update fontFamily
+   */
+  useEffect(() => {
+    if (!terminal || !config.fontFamily) return;
+    terminal.options.fontFamily = config.fontFamily;
+    fitAddonRef.current?.fit();
+  }, [terminal, config.fontFamily]);
+
+  /**
+   * Live-update tabStopWidth
+   */
+  useEffect(() => {
+    if (!terminal || config.tabStopWidth === undefined) return;
+    terminal.options.tabStopWidth = config.tabStopWidth;
+  }, [terminal, config.tabStopWidth]);
+
+  /**
    * Search functionality
    */
   const handleSearch = useCallback((query: string, direction: 'next' | 'previous' = 'next') => {
