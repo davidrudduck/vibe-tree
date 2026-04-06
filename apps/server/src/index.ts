@@ -101,6 +101,40 @@ Possible solutions:
     console.log(`[Database] Pruned ${pruned} stale project(s)`);
   }
 
+  // Reconcile terminal sessions with running tmux sessions
+  try {
+    const { execSync } = require('child_process');
+    // Mark all sessions as disconnected first
+    (databaseService as any).terminalSessions?.markAllDisconnected();
+
+    // Get running tmux sessions
+    try {
+      const tmuxOutput = execSync('tmux list-sessions -F "#{session_name}"', { encoding: 'utf8' });
+      const runningNames = tmuxOutput.trim().split('\n').filter((n: string) => n.startsWith('vt-'));
+
+      // Update matching DB records to 'disconnected' (alive but no client)
+      for (const name of runningNames) {
+        const session = (databaseService as any).terminalSessions?.findByTmuxName(name);
+        if (session) {
+          (databaseService as any).terminalSessions?.updateStatus(session.id, 'disconnected');
+        }
+      }
+    } catch {
+      // tmux not running or no sessions — mark all as dead
+    }
+
+    const deadCount = (databaseService as any).terminalSessions?.pruneDead() ?? 0;
+    const activeCount = (databaseService as any).terminalSessions?.findAll()?.length ?? 0;
+    if (activeCount > 0) {
+      console.log(`[Sessions] Found ${activeCount} persistent tmux session(s)`);
+    }
+    if (deadCount > 0) {
+      console.log(`[Sessions] Cleaned up ${deadCount} dead session record(s)`);
+    }
+  } catch (error) {
+    console.warn('[Sessions] Failed to reconcile sessions:', error);
+  }
+
   // Setup REST routes
   setupRestRoutes(app, { shellManager, authService });
 

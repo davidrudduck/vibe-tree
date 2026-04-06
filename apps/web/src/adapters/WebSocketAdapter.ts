@@ -195,6 +195,14 @@ export class WebSocketAdapter extends BaseAdapter {
     };
   }
 
+  async listSessions(): Promise<any[]> {
+    return this.sendMessage('shell:list-sessions', {}).then((response: any) => response.sessions || []);
+  }
+
+  async disconnectSession(sessionId: string): Promise<void> {
+    await this.sendMessage('shell:disconnect', { sessionId });
+  }
+
   async startShell(worktreePath: string, cols?: number, rows?: number, forceNew?: boolean): Promise<ShellStartResult> {
     return this.sendMessage('shell:start', { worktreePath, cols, rows, forceNew });
   }

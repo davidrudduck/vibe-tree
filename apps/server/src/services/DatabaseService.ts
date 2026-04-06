@@ -7,6 +7,7 @@ import {
   SettingsRepository,
   SchedulerRepository,
   AgentRepository,
+  SessionRepository,
   type DatabaseConnection,
 } from '@vibetree/database';
 
@@ -20,6 +21,7 @@ class DatabaseService {
   private _settings: SettingsRepository | null = null;
   private _scheduler: SchedulerRepository | null = null;
   private _agents: AgentRepository | null = null;
+  private _terminalSessions: SessionRepository | null = null;
 
   /**
    * Initialize the database
@@ -57,6 +59,7 @@ class DatabaseService {
       this._settings = new SettingsRepository(this.connection.db);
       this._scheduler = new SchedulerRepository(this.connection.db);
       this._agents = new AgentRepository(this.connection.db);
+      this._terminalSessions = new SessionRepository(this.connection.db);
 
       console.log('[Database] Initialized successfully');
     } catch (error) {
@@ -119,6 +122,16 @@ class DatabaseService {
   }
 
   /**
+   * Get terminal sessions repository
+   */
+  get terminalSessions(): SessionRepository {
+    if (!this._terminalSessions) {
+      throw new Error('Database not initialized. Call initialize() first.');
+    }
+    return this._terminalSessions;
+  }
+
+  /**
    * Check if database is initialized
    */
   get isInitialized(): boolean {
@@ -136,6 +149,7 @@ class DatabaseService {
       this._settings = null;
       this._scheduler = null;
       this._agents = null;
+      this._terminalSessions = null;
       console.log('[Database] Closed');
     }
   }

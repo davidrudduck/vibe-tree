@@ -51,7 +51,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   error: null,
   projects: [],
   activeProjectId: null,
-  terminalSessions: new Map(),
+  terminalSessions: (() => {
+    try {
+      const saved = localStorage.getItem('vibetree_terminal_sessions');
+      return saved ? new Map(JSON.parse(saved)) : new Map();
+    } catch {
+      return new Map();
+    }
+  })(),
   theme: 'light',
   
   // Actions
@@ -173,17 +180,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     return state.activeProjectId ? state.projects.find(p => p.id === state.activeProjectId) : undefined;
   },
 
-  addTerminalSession: (worktreePath, sessionId) => 
+  addTerminalSession: (worktreePath, sessionId) =>
     set((state) => {
       const sessions = new Map(state.terminalSessions);
       sessions.set(worktreePath, sessionId);
+      localStorage.setItem('vibetree_terminal_sessions', JSON.stringify(Array.from(sessions.entries())));
       return { terminalSessions: sessions };
     }),
-    
+
   removeTerminalSession: (worktreePath) =>
     set((state) => {
       const sessions = new Map(state.terminalSessions);
       sessions.delete(worktreePath);
+      localStorage.setItem('vibetree_terminal_sessions', JSON.stringify(Array.from(sessions.entries())));
       return { terminalSessions: sessions };
     }),
     
