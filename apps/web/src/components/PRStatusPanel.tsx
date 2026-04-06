@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { GitPullRequest, X, RefreshCw } from 'lucide-react';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { WebSocketAdapter } from '../adapters/WebSocketAdapter';
@@ -68,16 +68,45 @@ const iconBtnStyle: React.CSSProperties = {
   alignItems: 'center',
 };
 
+const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+const RATE_LIMIT_THRESHOLD = 5;
+
 export function PRStatusPanel({ projectPath, onClose }: PRStatusPanelProps) {
   const { getAdapter } = useWebSocket();
   const [prs, setPrs] = useState<PullRequest[]>([]);
-  const [githubStatus, setGithubStatus] = useState<GitHubStatus>({ configured: false });
+  const [githubStatus, setGithubStatus] = useState<GitHubStatus | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [cache, setCache] = useState<{ prs: PullRequest[]; fetchedAt: number } | null>(null);
+  const [usingCache, setUsingCache] = useState(false);
+
+  // Use refs for cache/status to avoid dependency loop in fetchData
+  const githubStatusRef = useRef(githubStatus);
+  const cacheRef = useRef(cache);
+  githubStatusRef.current = githubStatus;
+  cacheRef.current = cache;
 
   const fetchData = useCallback(async () => {
     const adapter = getAdapter() as WebSocketAdapter | null;
     if (!adapter) return;
+
+    // Skip fetch if rate limit is low and cache is fresh
+    const currentStatus = githubStatusRef.current;
+    const currentCache = cacheRef.current;
+    if (
+      currentStatus?.rateLimit &&
+      currentStatus.rateLimit.remaining < RATE_LIMIT_THRESHOLD &&
+      currentCache &&
+      Date.now() - currentCache.fetchedAt < CACHE_TTL_MS
+    ) {
+      setPrs(currentCache.prs);
+      setUsingCache(true);
+      return;
+    }
+
     setLoading(true);
+    setError(null);
+    setUsingCache(false);
     try {
       const [status, pulls] = await Promise.all([
         adapter.getGitHubStatus(),
@@ -86,9 +115,17 @@ export function PRStatusPanel({ projectPath, onClose }: PRStatusPanelProps) {
       setGithubStatus(status);
       if (status.configured) {
         setPrs(pulls);
+        setCache({ prs: pulls, fetchedAt: Date.now() });
       }
     } catch (err) {
       console.error('Failed to fetch PR data:', err);
+      setError((err as Error).message || 'Failed to fetch pull requests');
+      // Fall back to cache if available
+      const fallbackCache = cacheRef.current;
+      if (fallbackCache) {
+        setPrs(fallbackCache.prs);
+        setUsingCache(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -126,7 +163,16 @@ export function PRStatusPanel({ projectPath, onClose }: PRStatusPanelProps) {
 
         {/* Content */}
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          {!githubStatus.configured ? (
+          {error && (
+            <div style={{ padding: '8px 16px', backgroundColor: 'rgba(239,68,68,0.1)', borderBottom: '1px solid rgba(239,68,68,0.3)', fontSize: '12px', color: '#f87171' }}>
+              {error}
+            </div>
+          )}
+          {githubStatus === null ? (
+            <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-muted, #6b7280)', fontSize: '13px' }}>
+              Loading...
+            </div>
+          ) : !githubStatus.configured ? (
             <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-muted, #6b7280)', fontSize: '13px' }}>
               Set GITHUB_TOKEN or GH_TOKEN to see PR status
             </div>
@@ -196,16 +242,21 @@ export function PRStatusPanel({ projectPath, onClose }: PRStatusPanelProps) {
           )}
         </div>
 
-        {/* Footer: rate limit */}
-        {githubStatus.configured && githubStatus.rateLimit && (
+        {/* Footer: rate limit / cache status */}
+        {githubStatus?.configured && (githubStatus.rateLimit || usingCache) && (
           <div style={{
             padding: '8px 16px',
             borderTop: '1px solid var(--border-color, #3c3c3c)',
             fontSize: '11px',
             color: 'var(--text-muted, #6b7280)',
             flexShrink: 0,
+            display: 'flex',
+            justifyContent: 'space-between',
           }}>
-            API: {githubStatus.rateLimit.remaining} requests remaining
+            {githubStatus.rateLimit && (
+              <span>API: {githubStatus.rateLimit.remaining} requests remaining</span>
+            )}
+            {usingCache && <span>Using cached data</span>}
           </div>
         )}
       </div>

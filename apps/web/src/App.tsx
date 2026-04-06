@@ -20,7 +20,7 @@ const settingsAdapter = new RestSettingsAdapter();
 
 function App() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const { projects, activeProjectId, addProject, addProjects, removeProject, setActiveProject, setSelectedTab, theme, setTheme, connected } = useAppStore();
+  const { projects, activeProjectId, addProject, addProjects, removeProject, setActiveProject, setSelectedTab, theme, setTheme, connected, setTerminalSettings } = useAppStore();
   const { connect } = useWebSocket();
   const [showProjectSelector, setShowProjectSelector] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -91,6 +91,15 @@ function App() {
       loadProjects();
     }
   }, [connected, autoLoadAttempted, projects.length, addProjects, setActiveProject]);
+
+  useEffect(() => {
+    if (!connected) return;
+    let cancelled = false;
+    settingsAdapter.getTerminalSettings()
+      .then((s) => { if (!cancelled) setTerminalSettings(s); })
+      .catch((err) => console.warn('Failed to load terminal settings:', err));
+    return () => { cancelled = true; };
+  }, [connected, setTerminalSettings]);
 
   useEffect(() => {
     // Initialize theme from localStorage or system preference
@@ -239,6 +248,7 @@ function App() {
             adapter={settingsAdapter}
             open={showSettings}
             onClose={() => setShowSettings(false)}
+            onSettingsChange={setTerminalSettings}
           />
           {showPRPanel && activeProjectId && (
             <PRStatusPanel
