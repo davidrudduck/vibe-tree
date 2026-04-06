@@ -8,7 +8,8 @@ import { ProjectSelector } from './components/ProjectSelector';
 import { Tabs, TabsList, TabsTrigger, TabsContent, SettingsDialog } from '@vibetree/ui';
 import { useAppStore } from './store';
 import { useWebSocket } from './hooks/useWebSocket';
-import { Sun, Moon, Plus, X, Terminal, GitBranch, CheckCircle, Settings } from 'lucide-react';
+import { Sun, Moon, Plus, X, Terminal, GitBranch, CheckCircle, Settings, Layers } from 'lucide-react';
+import { SessionPanel } from './components/SessionPanel';
 import { autoLoadProjects } from './services/projectValidation';
 import { getServerHttpUrl } from './services/portDiscovery';
 import { getAuthHeaders } from './services/authService';
@@ -22,6 +23,7 @@ function App() {
   const { connect } = useWebSocket();
   const [showProjectSelector, setShowProjectSelector] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showSessionPanel, setShowSessionPanel] = useState(false);
   const [autoLoadAttempted, setAutoLoadAttempted] = useState(false);
   const [showSuccessNotification, setShowSuccessNotification] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -199,6 +201,13 @@ function App() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setShowSessionPanel((v) => !v)}
+            className="p-2 hover:bg-accent rounded-md transition-colors"
+            aria-label="Sessions"
+          >
+            <Layers className="h-4 w-4" />
+          </button>
+          <button
             onClick={() => setShowSettings(true)}
             className="p-2 hover:bg-accent rounded-md transition-colors"
             aria-label="Settings"
@@ -222,6 +231,12 @@ function App() {
             open={showSettings}
             onClose={() => setShowSettings(false)}
           />
+          {showSessionPanel && activeProjectId && (
+            <SessionPanel
+              projectPath={projects.find((p) => p.id === activeProjectId)?.path ?? ''}
+              onClose={() => setShowSessionPanel(false)}
+            />
+          )}
         </div>
       </header>
 
