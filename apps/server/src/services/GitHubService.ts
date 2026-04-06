@@ -40,6 +40,8 @@ interface GitHubRateLimitResponse {
   };
 }
 
+import { databaseService } from './DatabaseService';
+
 export class GitHubService {
   private token: string | null;
   private static instance: GitHubService | null = null;
@@ -48,10 +50,16 @@ export class GitHubService {
     this.token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || null;
   }
 
+  refreshToken(): void {
+    const dbToken = databaseService.settings.get<string>('general', 'githubToken');
+    this.token = dbToken || process.env.GITHUB_TOKEN || process.env.GH_TOKEN || null;
+  }
+
   static getInstance(): GitHubService {
     if (!GitHubService.instance) {
       GitHubService.instance = new GitHubService();
     }
+    GitHubService.instance.refreshToken();
     return GitHubService.instance;
   }
 

@@ -431,6 +431,35 @@ export function setupRestRoutes(app: Express, services: Services) {
     }
   });
 
+  // GitHub token setting endpoints (protected) — must be before generic /:category/:key routes
+
+  // Get GitHub token (returns masked value or null)
+  app.get('/api/settings/general/githubToken', authService.requireAuth, (req, res) => {
+    try {
+      const value = databaseService.settings.get<string>('general', 'githubToken');
+      res.json({ value: value ?? null });
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
+  // Set GitHub token
+  app.put('/api/settings/general/githubToken', authService.requireAuth, async (req, res) => {
+    try {
+      const { value } = req.body;
+      if (value === undefined) {
+        return res.status(400).json({ error: 'value is required' });
+      }
+      const result = databaseService.settings.set('general', 'githubToken', value);
+      // Refresh the GitHubService singleton so it picks up the new token
+      const { GitHubService } = await import('../services/GitHubService');
+      GitHubService.getInstance().refreshToken();
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
   // Generic settings endpoints (protected)
 
   // Get all settings for a category

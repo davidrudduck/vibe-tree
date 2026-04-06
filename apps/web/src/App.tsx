@@ -20,7 +20,7 @@ const settingsAdapter = new RestSettingsAdapter();
 
 function App() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const { projects, activeProjectId, addProject, addProjects, removeProject, setActiveProject, setSelectedTab, theme, setTheme, connected, setTerminalSettings } = useAppStore();
+  const { projects, activeProjectId, addProject, addProjects, removeProject, setActiveProject, setSelectedTab, theme, setTheme, connected, setTerminalSettings, terminalSessions } = useAppStore();
   const { connect } = useWebSocket();
   const [showProjectSelector, setShowProjectSelector] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -273,21 +273,29 @@ function App() {
       >
         <div className="border-b flex items-center gap-2 bg-muted/50 h-10">
           <TabsList className="h-full bg-transparent p-0 rounded-none">
-            {projects.map((project) => (
-              <TabsTrigger
-                key={project.id}
-                value={project.id}
-                className="relative pr-8 h-full data-[state=active]:bg-background data-[state=active]:rounded-t-md data-[state=active]:border-t data-[state=active]:border-x data-[state=active]:border-b-0"
-              >
-                {project.name}
-                <span
-                  className="absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5 p-0.5 hover:bg-muted rounded cursor-pointer inline-flex items-center justify-center"
-                  onClick={(e) => handleCloseProject(e, project.id)}
+            {projects.map((project) => {
+              const hasActiveSessions = project.worktrees?.some(wt => terminalSessions.has(wt.path));
+              return (
+                <TabsTrigger
+                  key={project.id}
+                  value={project.id}
+                  className="relative pr-8 h-full data-[state=active]:bg-background data-[state=active]:rounded-t-md data-[state=active]:border-t data-[state=active]:border-x data-[state=active]:border-b-0"
                 >
-                  <X className="h-3 w-3" />
-                </span>
-              </TabsTrigger>
-            ))}
+                  <span className="flex items-center gap-1.5">
+                    {project.name}
+                    {hasActiveSessions && (
+                      <span className="h-1.5 w-1.5 rounded-full bg-green-400 flex-shrink-0" />
+                    )}
+                  </span>
+                  <span
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5 p-0.5 hover:bg-muted rounded cursor-pointer inline-flex items-center justify-center"
+                    onClick={(e) => handleCloseProject(e, project.id)}
+                  >
+                    <X className="h-3 w-3" />
+                  </span>
+                </TabsTrigger>
+              );
+            })}
           </TabsList>
           <button
             onClick={() => setShowProjectSelector(true)}
