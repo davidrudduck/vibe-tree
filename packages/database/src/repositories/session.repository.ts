@@ -1,13 +1,12 @@
 import { eq } from 'drizzle-orm';
 import { DrizzleDB } from '../connection';
 import { terminalSessions, TerminalSession } from '../schema/sessions';
-import { createId } from '@paralleldrive/cuid2';
 
 export class SessionRepository {
   constructor(private db: DrizzleDB) {}
 
   /**
-   * Create or update a session record
+   * Create or update a session record (atomic upsert)
    */
   upsert(data: {
     id: string;
@@ -16,46 +15,33 @@ export class SessionRepository {
     tmuxSessionName: string;
     status?: string;
   }): TerminalSession {
-    const existing = this.db
-      .select()
-      .from(terminalSessions)
-      .where(eq(terminalSessions.id, data.id))
-      .get();
-
     const now = new Date();
 
-    if (existing) {
-      const updated = this.db
-        .update(terminalSessions)
-        .set({
-          projectPath: data.projectPath,
-          worktreePath: data.worktreePath,
-          tmuxSessionName: data.tmuxSessionName,
-          status: data.status ?? existing.status,
-          lastActivity: now,
-        })
-        .where(eq(terminalSessions.id, data.id))
-        .returning()
-        .get();
-
-      return updated!;
-    } else {
-      const newSession = this.db
-        .insert(terminalSessions)
-        .values({
-          id: data.id || createId(),
+    const result = this.db
+      .insert(terminalSessions)
+      .values({
+        id: data.id,
+        projectPath: data.projectPath,
+        worktreePath: data.worktreePath,
+        tmuxSessionName: data.tmuxSessionName,
+        status: data.status ?? 'active',
+        createdAt: now,
+        lastActivity: now,
+      })
+      .onConflictDoUpdate({
+        target: terminalSessions.id,
+        set: {
           projectPath: data.projectPath,
           worktreePath: data.worktreePath,
           tmuxSessionName: data.tmuxSessionName,
           status: data.status ?? 'active',
-          createdAt: now,
           lastActivity: now,
-        })
-        .returning()
-        .get();
+        },
+      })
+      .returning()
+      .get();
 
-      return newSession!;
-    }
+    return result!;
   }
 
   /**
@@ -108,23 +94,25 @@ export class SessionRepository {
   /**
    * Update session status
    */
-  updateStatus(id: string, status: string): void {
-    this.db
+  updateStatus(id: string, status: string): boolean {
+    const result = this.db
       .update(terminalSessions)
       .set({ status })
       .where(eq(terminalSessions.id, id))
       .run();
+    return result.changes > 0;
   }
 
   /**
    * Update last activity timestamp
    */
-  updateActivity(id: string): void {
-    this.db
+  updateActivity(id: string): boolean {
+    const result = this.db
       .update(terminalSessions)
       .set({ lastActivity: new Date() })
       .where(eq(terminalSessions.id, id))
       .run();
+    return result.changes > 0;
   }
 
   /**
@@ -150,13 +138,12 @@ export class SessionRepository {
   }
 
   /**
-   * Mark all 'active' sessions as 'disconnected' (for server startup)
+   * Mark all sessions as 'dead' (for server startup reconciliation)
    */
-  markAllDisconnected(): number {
+  markAllDead(): number {
     const result = this.db
       .update(terminalSessions)
-      .set({ status: 'disconnected' })
-      .where(eq(terminalSessions.status, 'active'))
+      .set({ status: 'dead' })
       .run();
     return result.changes;
   }

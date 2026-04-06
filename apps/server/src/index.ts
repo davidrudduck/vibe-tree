@@ -104,15 +104,14 @@ Possible solutions:
   // Reconcile terminal sessions with running tmux sessions
   try {
     const { execSync } = require('child_process');
-    // Mark all sessions as disconnected first
-    (databaseService as any).terminalSessions?.markAllDisconnected();
+    // Mark all sessions as dead first, then revive ones that are still running
+    (databaseService as any).terminalSessions?.markAllDead();
 
-    // Get running tmux sessions
+    // Get running tmux sessions and mark matching DB records as disconnected
     try {
       const tmuxOutput = execSync('tmux list-sessions -F "#{session_name}"', { encoding: 'utf8' });
       const runningNames = tmuxOutput.trim().split('\n').filter((n: string) => n.startsWith('vt-'));
 
-      // Update matching DB records to 'disconnected' (alive but no client)
       for (const name of runningNames) {
         const session = (databaseService as any).terminalSessions?.findByTmuxName(name);
         if (session) {
@@ -120,7 +119,7 @@ Possible solutions:
         }
       }
     } catch {
-      // tmux not running or no sessions — mark all as dead
+      // tmux not running or no sessions — all remain marked as dead
     }
 
     const deadCount = (databaseService as any).terminalSessions?.pruneDead() ?? 0;

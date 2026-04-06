@@ -452,8 +452,6 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
 
           case 'shell:list-sessions': {
             try {
-              const sessions = await shellManager.getAllSessions();
-              // Also get sessions from database for persistence
               const dbSessions = (databaseService as any).terminalSessions?.findAll() ?? [];
               ws.send(JSON.stringify({
                 type: 'shell:list-sessions:response',
