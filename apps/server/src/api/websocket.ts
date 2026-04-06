@@ -34,6 +34,7 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
     let authenticated = false;
     let deviceId: string | null = null;
     let activeShellSessions: Set<string> = new Set();
+    const connectionId = `ws-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     // Handle authentication
     const url = new URL(req.url!, `http://${req.headers.host}`);
@@ -179,18 +180,27 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
             
             if (result.success && result.processId) {
               activeShellSessions.add(result.processId);
-              const connectionId = `ws-${Date.now()}`;
-              
+
+              // Persist session to database (optional chaining in case terminalSessions isn't available yet)
+              (databaseService as any).terminalSessions?.upsert({
+                id: result.processId,
+                projectPath: message.payload.projectPath || message.payload.worktreePath,
+                worktreePath: message.payload.worktreePath,
+                tmuxSessionName: `vt-${result.processId.substring(0, 8)}`,
+                status: 'active'
+              });
+
               // Set up output forwarding using the new listener methods
               // This works for both new and existing sessions
-              shellManager.addOutputListener(result.processId, connectionId, (data) => {
+              await shellManager.addOutputListener(result.processId, connectionId, (data) => {
                 ws.send(JSON.stringify({
                   type: 'shell:output',
                   payload: { sessionId: result.processId, data }
                 }));
               });
-              
-              shellManager.addExitListener(result.processId, connectionId, (exitCode) => {
+
+              await shellManager.addExitListener(result.processId, connectionId, (exitCode) => {
+                (databaseService as any).terminalSessions?.delete(result.processId!);
                 ws.send(JSON.stringify({
                   type: 'shell:exit',
                   payload: { sessionId: result.processId, code: exitCode }
@@ -198,7 +208,7 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
                 activeShellSessions.delete(result.processId!);
               });
             }
-            
+
             ws.send(JSON.stringify({
               type: 'shell:start:response',
               payload: result,
@@ -419,6 +429,70 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
             break;
           }
 
+          case 'shell:terminate': {
+            try {
+              const { sessionId } = message.payload;
+              const result = await shellManager.terminateSession(sessionId);
+              activeShellSessions.delete(sessionId);
+              // Remove from database (optional chaining in case terminalSessions isn't available yet)
+              (databaseService as any).terminalSessions?.delete(sessionId);
+              ws.send(JSON.stringify({
+                type: 'shell:terminate:response',
+                payload: result,
+                id: message.id
+              }));
+            } catch (error) {
+              ws.send(JSON.stringify({
+                type: 'error',
+                payload: { error: (error as Error).message },
+                id: message.id
+              }));
+            }
+            break;
+          }
+
+          case 'shell:list-sessions': {
+            try {
+              const dbSessions = (databaseService as any).terminalSessions?.findAll() ?? [];
+              ws.send(JSON.stringify({
+                type: 'shell:list-sessions:response',
+                payload: { sessions: dbSessions },
+                id: message.id
+              }));
+            } catch (error) {
+              ws.send(JSON.stringify({
+                type: 'error',
+                payload: { error: (error as Error).message },
+                id: message.id
+              }));
+            }
+            break;
+          }
+
+          case 'shell:disconnect': {
+            try {
+              const { sessionId } = message.payload;
+              // Remove all listeners but keep tmux alive
+              shellManager.removeOutputListener(sessionId, connectionId);
+              shellManager.removeExitListener(sessionId, connectionId);
+              activeShellSessions.delete(sessionId);
+              // Update DB status (optional chaining in case terminalSessions isn't available yet)
+              (databaseService as any).terminalSessions?.updateStatus(sessionId, 'disconnected');
+              ws.send(JSON.stringify({
+                type: 'shell:disconnect:response',
+                payload: { success: true },
+                id: message.id
+              }));
+            } catch (error) {
+              ws.send(JSON.stringify({
+                type: 'error',
+                payload: { error: (error as Error).message },
+                id: message.id
+              }));
+            }
+            break;
+          }
+
           default:
             ws.send(JSON.stringify({
               type: 'error',
@@ -437,9 +511,10 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
 
     ws.on('close', (code, reason) => {
       console.log('💔 WebSocket connection closed:', { code, reason: reason.toString(), authenticated, deviceId });
-      // Clean up any active shell sessions
+      // Remove all listeners for this connection but keep tmux sessions alive
       for (const sessionId of activeShellSessions) {
-        shellManager.terminateSession(sessionId);
+        shellManager.removeOutputListener(sessionId, connectionId);
+        shellManager.removeExitListener(sessionId, connectionId);
       }
     });
 
