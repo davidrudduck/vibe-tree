@@ -46,55 +46,13 @@ export function TerminalView({ worktreePath }: TerminalViewProps) {
       return;
     }
 
-    // Check if we already have a session for this worktree
-    const existingSessionId = terminalSessions.get(selectedWorktree);
-    if (existingSessionId) {
-      // Set up event listeners for existing session
-      const unsubscribeOutput = adapter.onShellOutput(existingSessionId, (data) => {
-        if (terminalRef.current) {
-          terminalRef.current.write(data);
-        }
-      });
+    // Always call startShell — the server uses deterministic session IDs based on
+    // worktree path, so calling it again after a page refresh will reattach to the
+    // existing tmux session (isNew: false) and register fresh output/exit listeners
+    // for the new WebSocket connection. This handles both the first-load and
+    // page-refresh cases transparently.
 
-      const unsubscribeExit = adapter.onShellExit(existingSessionId, (code) => {
-        if (terminalRef.current) {
-          terminalRef.current.write(`\r\n[Process exited with code ${code}]\r\n`);
-        }
-        // Clear cached state when session exits
-        terminalStateCache.delete(existingSessionId);
-        removeTerminalSession(selectedWorktree);
-        setSessionId(null);
-      });
-
-      cleanupRef.current = [unsubscribeOutput, unsubscribeExit];
-      setSessionId(existingSessionId);
-      
-      // Restore terminal state for existing session (like desktop app)
-      console.log('🔄 Reconnecting to existing session - restoring state');
-      console.log('📊 Session cache status:', {
-        sessionId: existingSessionId,
-        hasCachedState: terminalStateCache.has(existingSessionId),
-        cacheSize: terminalStateCache.size,
-        allCachedSessions: Array.from(terminalStateCache.keys())
-      });
-      
-      const cachedState = terminalStateCache.get(existingSessionId);
-      if (cachedState && terminalRef.current) {
-        setTimeout(() => {
-          if (terminalRef.current && cachedState) {
-            terminalRef.current.clear();
-            terminalRef.current.write(cachedState);
-            console.log('✅ State restored for existing session:', existingSessionId);
-          }
-        }, 100);
-      } else {
-        console.log('⚠️ No cached state for existing session:', existingSessionId);
-      }
-      
-      return;
-    }
-
-    // Start new shell session - follow desktop app pattern
+    // Start shell session - follow desktop app pattern
     const startSession = async () => {
       try {
         // Call server directly and wait for actual session ID (like desktop app)
@@ -182,7 +140,8 @@ export function TerminalView({ worktreePath }: TerminalViewProps) {
       cleanupRef.current.forEach(cleanup => cleanup());
       cleanupRef.current = [];
     };
-  }, [selectedWorktree, getAdapter, terminalSessions, addTerminalSession, removeTerminalSession]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedWorktree, getAdapter]);
 
   // Cleanup split terminal on unmount
   useEffect(() => {
