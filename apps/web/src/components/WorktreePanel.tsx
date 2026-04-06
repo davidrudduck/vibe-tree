@@ -8,19 +8,22 @@ interface WorktreePanelProps {
 }
 
 export function WorktreePanel({ projectId }: WorktreePanelProps) {
-  const { 
+  const {
     getProject,
     updateProjectWorktrees,
     setSelectedWorktree,
     connected
   } = useAppStore();
-  
+
   const { getAdapter } = useWebSocket();
   const [loading, setLoading] = useState(false);
   const [showNewBranchDialog, setShowNewBranchDialog] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
   const [aheadBehind, setAheadBehind] = useState<Map<string, { ahead: number; behind: number }>>(new Map());
-  
+
+  const [branches, setBranches] = useState<{ name: string; current: boolean; remote: boolean }[]>([]);
+  const [startPoint, setStartPoint] = useState<string>('');
+
   const project = getProject(projectId);
   const adapter = getAdapter(); // Get adapter once per render
 
@@ -40,10 +43,10 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
   };
 
   const handleSelectWorktree = (path: string) => {
-    console.log('🎯 WorktreePanel: Selecting worktree:', { 
-      projectId, 
-      path, 
-      currentSelection: project?.selectedWorktree 
+    console.log('🎯 WorktreePanel: Selecting worktree:', {
+      projectId,
+      path,
+      currentSelection: project?.selectedWorktree
     });
     setSelectedWorktree(projectId, path);
   };
@@ -58,16 +61,18 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
 
     setLoading(true);
     try {
-      const result = await adapter.addWorktree(project.path, newBranchName);
+      const result = await adapter.addWorktree(project.path, newBranchName, startPoint || undefined);
       console.log('✅ Created worktree:', result);
-      
+
       setShowNewBranchDialog(false);
       setNewBranchName('');
-      
+      setStartPoint('');
+      setBranches([]);
+
       // Refresh worktrees to show the new one
       const trees = await adapter.listWorktrees(project.path);
       updateProjectWorktrees(projectId, trees);
-      
+
       // Select the newly created worktree
       setSelectedWorktree(projectId, result.path);
     } catch (error) {
@@ -78,33 +83,42 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
     }
   };
 
+  // Fetch branches when dialog opens
+  useEffect(() => {
+    if (!showNewBranchDialog || !project) return;
+    const adapter = getAdapter();
+    if (!adapter) return;
+    adapter.getBranches(project.path).then(setBranches).catch(() => {});
+    setStartPoint(''); // Reset to HEAD
+  }, [showNewBranchDialog, project, getAdapter]);
+
   // Auto-load worktrees when component mounts or project changes
   useEffect(() => {
-    console.log('🔄 WorktreePanel useEffect triggered:', { 
-      projectId, 
-      connected, 
+    console.log('🔄 WorktreePanel useEffect triggered:', {
+      projectId,
+      connected,
       loading,
       hasProject: !!project,
       hasAdapter: !!adapter,
       projectPath: project?.path,
       currentWorktrees: project?.worktrees?.length || 0
     });
-    
+
     if (!project || !connected || loading || !adapter) {
-      console.log('❌ Early return from useEffect:', { 
-        hasProject: !!project, 
-        connected, 
+      console.log('❌ Early return from useEffect:', {
+        hasProject: !!project,
+        connected,
         loading,
         hasAdapter: !!adapter
       });
       return;
     }
-    
+
     // Inline refresh logic with stable dependencies
     const loadWorktrees = async () => {
       console.log('🚀 Starting worktree load for:', project.path);
       setLoading(true);
-      
+
       try {
         const trees = await adapter.listWorktrees(project.path);
         console.log('✅ Worktrees loaded:', trees);
@@ -131,10 +145,10 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
         console.log('🏁 Loading finished');
       }
     };
-    
+
     loadWorktrees();
   }, [projectId, connected, adapter?.constructor?.name]); // Stable dependency on adapter presence
-  
+
   if (!project) {
     return <div className="flex-1 flex items-center justify-center text-muted-foreground">Project not found</div>;
   }
@@ -208,8 +222,8 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
               // Sort alphabetically for the rest
               return branchA.localeCompare(branchB);
             }).map((worktree) => {
-              console.log('🌳 Rendering worktree:', { 
-                branch: worktree.branch, 
+              console.log('🌳 Rendering worktree:', {
+                branch: worktree.branch,
                 path: worktree.path,
                 isSelected: project.selectedWorktree === worktree.path
               });
@@ -219,8 +233,8 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
                   onClick={() => handleSelectWorktree(worktree.path)}
                   className={`
                     w-full text-left p-3 rounded-md mb-1 transition-colors
-                    ${project.selectedWorktree === worktree.path 
-                      ? 'bg-accent' 
+                    ${project.selectedWorktree === worktree.path
+                      ? 'bg-accent'
                       : 'hover:bg-accent/50'
                     }
                   `}
@@ -266,7 +280,7 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
               <p className="text-sm text-muted-foreground mb-4">
                 This will create a new git worktree for parallel development
               </p>
-              
+
               <input
                 type="text"
                 placeholder="feature-name"
@@ -279,17 +293,42 @@ export function WorktreePanel({ projectId }: WorktreePanelProps) {
                   if (e.key === 'Escape') {
                     setShowNewBranchDialog(false);
                     setNewBranchName('');
+                    setStartPoint('');
+                    setBranches([]);
                   }
                 }}
                 className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring"
                 autoFocus
               />
-              
+
+              <div className="space-y-1 mt-4">
+                <label className="text-xs text-muted-foreground">Base branch</label>
+                <select
+                  value={startPoint}
+                  onChange={(e) => setStartPoint(e.target.value)}
+                  className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm"
+                >
+                  <option value="">HEAD (current)</option>
+                  {branches.filter(b => !b.remote).map(b => (
+                    <option key={b.name} value={b.name}>
+                      {b.name} {b.current ? '(current)' : ''}
+                    </option>
+                  ))}
+                  <optgroup label="Remote">
+                    {branches.filter(b => b.remote).map(b => (
+                      <option key={b.name} value={b.name}>{b.name}</option>
+                    ))}
+                  </optgroup>
+                </select>
+              </div>
+
               <div className="flex justify-end gap-2 mt-6">
                 <button
                   onClick={() => {
                     setShowNewBranchDialog(false);
                     setNewBranchName('');
+                    setStartPoint('');
+                    setBranches([]);
                   }}
                   className="px-4 py-2 text-sm border border-border rounded-md hover:bg-accent"
                 >
