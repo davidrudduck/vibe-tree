@@ -237,7 +237,7 @@ export const Terminal: React.FC<TerminalProps> = ({
     
     // Fit terminal to container after render
     setTimeout(() => {
-      fitAddon.fit();
+      try { fitAddon.fit(); } catch { /* terminal not ready */ }
       // Explicitly resize terminal to ensure PTY knows the dimensions
       term.resize(term.cols, term.rows);
       term.focus();
@@ -254,7 +254,7 @@ export const Terminal: React.FC<TerminalProps> = ({
     const handleResize = () => {
       if (terminalRef.current && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
         // First, fit the terminal to the container
-        fitAddon.fit();
+        try { fitAddon.fit(); } catch { return; } // Guard against uninitialized render service
         
         // Get the new dimensions after fitting
         const newCols = term.cols;
@@ -339,14 +339,25 @@ export const Terminal: React.FC<TerminalProps> = ({
     terminal.options.theme = getTerminalTheme(config.theme);
   }, [terminal, config.theme]);
 
+  // Safe fit helper — only call fit() when terminal element is attached and has dimensions
+  const safeFit = useCallback(() => {
+    const el = terminal?.element;
+    if (!el || !el.parentElement || el.parentElement.clientWidth === 0) return;
+    try {
+      fitAddonRef.current?.fit();
+    } catch {
+      // Terminal not ready for fitting yet
+    }
+  }, [terminal]);
+
   /**
    * Live-update fontSize
    */
   useEffect(() => {
     if (!terminal || config.fontSize === undefined) return;
     terminal.options.fontSize = config.fontSize;
-    fitAddonRef.current?.fit();
-  }, [terminal, config.fontSize]);
+    requestAnimationFrame(safeFit);
+  }, [terminal, config.fontSize, safeFit]);
 
   /**
    * Live-update cursorBlink
@@ -370,8 +381,8 @@ export const Terminal: React.FC<TerminalProps> = ({
   useEffect(() => {
     if (!terminal || !config.fontFamily) return;
     terminal.options.fontFamily = config.fontFamily;
-    fitAddonRef.current?.fit();
-  }, [terminal, config.fontFamily]);
+    requestAnimationFrame(safeFit);
+  }, [terminal, config.fontFamily, safeFit]);
 
   /**
    * Live-update tabStopWidth
