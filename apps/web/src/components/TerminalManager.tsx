@@ -16,8 +16,8 @@ export function TerminalManager({ worktrees, selectedWorktree }: TerminalManager
   // Track which terminals have been created
   const createdTerminals = useRef<Set<string>>(new Set());
 
-  // On mount and when terminalSessions changes, auto-activate worktrees that have
-  // a cached session (page refresh scenario).
+  // On mount, auto-activate worktrees that have a cached session (page refresh scenario).
+  // terminalSessions is synchronously initialized from localStorage before first render.
   useEffect(() => {
     if (terminalSessions.size === 0) return;
     setActiveTerminals((prev) => {
