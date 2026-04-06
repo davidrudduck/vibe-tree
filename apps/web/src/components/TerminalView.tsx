@@ -447,6 +447,8 @@ export function TerminalView({ worktreePath, onClose, onExited }: TerminalViewPr
             </button>
             <button
               onClick={async () => {
+                // Close split terminal first if open
+                if (isSplit) closeSplitTerminal();
                 if (!exited && sessionId) {
                   const adapter = getAdapter();
                   if (adapter) {

@@ -9,7 +9,7 @@ interface TerminalManagerProps {
 }
 
 export function TerminalManager({ worktrees, selectedWorktree }: TerminalManagerProps) {
-  const { terminalSessions } = useAppStore();
+  const { terminalSessions, removeTerminalSession } = useAppStore();
   const [mountedTerminals, setMountedTerminals] = useState<Set<string>>(new Set());
   const [activeTerminals, setActiveTerminals] = useState<Set<string>>(new Set());
 
@@ -79,6 +79,8 @@ export function TerminalManager({ worktrees, selectedWorktree }: TerminalManager
     setActiveTerminals((prev) => { const n = new Set(prev); n.delete(worktreePath); return n; });
     setMountedTerminals((prev) => { const n = new Set(prev); n.delete(worktreePath); return n; });
     createdTerminals.current.delete(worktreePath);
+    // Remove from persisted store so it doesn't auto-activate on refresh
+    removeTerminalSession(worktreePath);
   };
 
   if (!selectedWorktree) {
