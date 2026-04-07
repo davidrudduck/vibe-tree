@@ -249,6 +249,28 @@ export class TmuxSessionManager {
   }
 
   /**
+   * Attach to an externally-linked tmux session by its known name and session ID.
+   * Used when a session was linked via the UI and we need to reconnect to it.
+   */
+  async attachExternalSession(sessionId: string, tmuxName: string, worktreePath: string): Promise<ShellStartResult> {
+    // Already tracked in memory
+    const existing = this.sessions.get(sessionId);
+    if (existing) {
+      existing.lastActivity = new Date();
+      return { success: true, processId: sessionId, isNew: false };
+    }
+
+    // Check if the tmux session still exists
+    const exists = await this.tmuxSessionExists(tmuxName);
+    if (!exists) {
+      return { success: false, error: `Tmux session '${tmuxName}' no longer exists` };
+    }
+
+    await this.attachToExistingSession(sessionId, tmuxName, worktreePath);
+    return { success: true, processId: sessionId, isNew: false };
+  }
+
+  /**
    * Attach to an existing tmux session that wasn't tracked in our sessions map
    */
   private async attachToExistingSession(sessionId: string, tmuxName: string, worktreePath: string): Promise<void> {

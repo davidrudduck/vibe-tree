@@ -174,24 +174,42 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
         // Handle different message types
         switch (message.type) {
           case 'shell:start': {
-            const result = await shellManager.startShell(
-              message.payload.worktreePath,
-              deviceId || undefined,
-              message.payload.cols,
-              message.payload.rows,
-              message.payload.forceNew
-            );
-            
+            // Check if this worktree has a linked external tmux session
+            const linkedExternal = !message.payload.forceNew
+              ? (databaseService as any).terminalSessions
+                  ?.findByWorktree(message.payload.worktreePath)
+                  ?.find((s: any) => s.isExternal)
+              : undefined;
+
+            const result = linkedExternal
+              ? await shellManager.attachExternalSession(
+                  linkedExternal.id,
+                  linkedExternal.tmuxSessionName,
+                  message.payload.worktreePath
+                )
+              : await shellManager.startShell(
+                  message.payload.worktreePath,
+                  deviceId || undefined,
+                  message.payload.cols,
+                  message.payload.rows,
+                  message.payload.forceNew
+                );
+
             if (result.success && result.processId) {
               activeShellSessions.add(result.processId);
+
+              const tmuxSessionName = linkedExternal
+                ? linkedExternal.tmuxSessionName
+                : `vt-${result.processId.substring(0, 8)}`;
 
               // Persist session to database (optional chaining in case terminalSessions isn't available yet)
               (databaseService as any).terminalSessions?.upsert({
                 id: result.processId,
                 projectPath: message.payload.projectPath || message.payload.worktreePath,
                 worktreePath: message.payload.worktreePath,
-                tmuxSessionName: `vt-${result.processId.substring(0, 8)}`,
-                status: 'active'
+                tmuxSessionName,
+                status: 'active',
+                isExternal: linkedExternal ? true : undefined,
               });
 
               // Set up output forwarding using the new listener methods
