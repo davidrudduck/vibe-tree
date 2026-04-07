@@ -174,11 +174,15 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
         // Handle different message types
         switch (message.type) {
           case 'shell:start': {
-            // Check if this worktree has a linked external tmux session
+            // Check if this worktree has a linked external tmux session.
+            // Sort by lastActivity desc to pick the most recently active link when
+            // multiple rows exist (e.g. from repeated session:link calls).
             const linkedExternal = !message.payload.forceNew
               ? (databaseService as any).terminalSessions
                   ?.findByWorktree(message.payload.worktreePath)
-                  ?.find((s: any) => s.isExternal)
+                  ?.filter((s: any) => s.isExternal)
+                  ?.sort((a: any, b: any) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime())
+                  ?.[0]
               : undefined;
 
             const result = linkedExternal
@@ -570,6 +574,10 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
           case 'session:link': {
             try {
               const { tmuxSessionName, projectPath, worktreePath } = message.payload;
+              if (!/^[a-zA-Z0-9._-]+$/.test(tmuxSessionName)) {
+                ws.send(JSON.stringify({ type: 'error', payload: { error: `Invalid tmux session name: '${tmuxSessionName}'` }, id: message.id }));
+                break;
+              }
               const sessionId = `ext-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
               const session = databaseService.terminalSessions.upsert({
                 id: sessionId,

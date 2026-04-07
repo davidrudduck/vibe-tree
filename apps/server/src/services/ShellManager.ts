@@ -93,7 +93,10 @@ export class ShellManager {
     if (this.sessionManager instanceof TmuxSessionManager) {
       return this.sessionManager.attachExternalSession(sessionId, tmuxName, worktreePath);
     }
-    // PTY fallback: no concept of named external sessions, just start normally
-    return this.startShell(worktreePath);
+    // PTY mode has no concept of named external sessions — surface the broken link
+    return {
+      success: false,
+      error: 'Linked tmux sessions can only be reattached when the tmux backend is active',
+    };
   }
 }
