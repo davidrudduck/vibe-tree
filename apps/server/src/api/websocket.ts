@@ -213,7 +213,7 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
                 worktreePath: message.payload.worktreePath,
                 tmuxSessionName,
                 status: 'active',
-                isExternal: linkedExternal ? true : undefined,
+                isExternal: !!linkedExternal,
               });
 
               // Set up output forwarding using the new listener methods
