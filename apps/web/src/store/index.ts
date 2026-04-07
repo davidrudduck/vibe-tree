@@ -82,7 +82,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       return existing.id;
     }
 
-    const id = `project-${Date.now()}`;
+    const id = `project-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const name = path.split('/').pop() || 'Unnamed Project';
     
     const newProject: Project = {
@@ -114,7 +114,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         return;
       }
 
-      const id = `project-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const id = `project-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const name = path.split('/').pop() || 'Unnamed Project';
       
       const newProject: Project = {
