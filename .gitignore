@@ -62,7 +62,15 @@ packages/server/.env
 
 **/playwright-report/**
 **/test-results/**
+.playwright-mcp/
 
 # E2E test exit status file
 **/.exit-status
+
+# OMC agent state
+.omc/
+
+# Scratch/debug screenshots and prototypes at repo root
+/*.png
+/ui-concepts.html
 
