@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { X, RefreshCw, Trash2 } from 'lucide-react';
 import { useWebSocket } from '../hooks/useWebSocket';
 import type { WebSocketAdapter } from '../adapters/WebSocketAdapter';
+import { LinkSessionDialog } from './LinkSessionDialog';
+import { ReassignSessionDialog } from './ReassignSessionDialog';
 
 interface TerminalSession {
   id: string;
@@ -9,6 +11,7 @@ interface TerminalSession {
   worktreePath: string;
   tmuxSessionName: string;
   status: 'active' | 'disconnected' | 'dead';
+  isExternal: boolean;
   createdAt: string;
   lastActivity: string;
 }
@@ -146,6 +149,8 @@ export function SessionPanel({ projectPath, onClose }: SessionPanelProps) {
   const [tmuxSessions, setTmuxSessions] = useState<TmuxSession[]>([]);
   const [loading, setLoading] = useState(false);
   const [terminatingIds, setTerminatingIds] = useState<Set<string>>(new Set());
+  const [linkingSession, setLinkingSession] = useState<string | null>(null);
+  const [reassigningSession, setReassigningSession] = useState<{ id: string; worktreePath: string } | null>(null);
 
   const fetchSessions = useCallback(async () => {
     const adapter = getAdapter();
@@ -242,6 +247,23 @@ export function SessionPanel({ projectPath, onClose }: SessionPanelProps) {
                 >
                   <Trash2 size={14} />
                 </button>
+                {session.isExternal && (
+                  <button
+                    style={{
+                      background: 'none',
+                      border: '1px solid var(--border-color, #3c3c3c)',
+                      cursor: 'pointer',
+                      color: 'var(--text-primary, #d4d4d4)',
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      flexShrink: 0,
+                    }}
+                    onClick={() => setReassigningSession({ id: session.id, worktreePath: session.worktreePath })}
+                  >
+                    Re-assign
+                  </button>
+                )}
               </div>
             ))
           )}
@@ -280,11 +302,41 @@ export function SessionPanel({ projectPath, onClose }: SessionPanelProps) {
                   </div>
                 </div>
                 {session.isVibeTree && <span style={vtBadgeStyle}>VT</span>}
+                {!session.isVibeTree && (
+                  <button
+                    style={{
+                      background: 'none',
+                      border: '1px solid var(--border-color, #3c3c3c)',
+                      cursor: 'pointer',
+                      color: 'var(--text-primary, #d4d4d4)',
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      flexShrink: 0,
+                    }}
+                    onClick={() => setLinkingSession(session.name)}
+                  >
+                    Link
+                  </button>
+                )}
               </div>
             ))
           )}
         </div>
       </div>
+      <LinkSessionDialog
+        tmuxSessionName={linkingSession ?? ''}
+        open={linkingSession !== null}
+        onClose={() => setLinkingSession(null)}
+        onLinked={() => { setLinkingSession(null); fetchSessions(); }}
+      />
+      <ReassignSessionDialog
+        sessionId={reassigningSession?.id ?? ''}
+        currentWorktreePath={reassigningSession?.worktreePath ?? ''}
+        open={reassigningSession !== null}
+        onClose={() => setReassigningSession(null)}
+        onReassigned={() => { setReassigningSession(null); fetchSessions(); }}
+      />
     </div>
   );
 }

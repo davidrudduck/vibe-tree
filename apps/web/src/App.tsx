@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useAuth, LoginPage } from '@vibetree/auth';
-import { WorktreePanel } from './components/WorktreePanel';
 import { TerminalManager } from './components/TerminalManager';
 import { GitDiffView } from './components/GitDiffView';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { ProjectSelector } from './components/ProjectSelector';
-import { Tabs, TabsList, TabsTrigger, TabsContent, SettingsDialog } from '@vibetree/ui';
+import { SettingsDialog } from '@vibetree/ui';
+import { WorktreeStrip } from './components/WorktreeStrip';
+import { CreateWorktreeDialog } from './components/CreateWorktreeDialog';
+import { MobileBottomNav, type MobileView } from './components/MobileBottomNav';
 import { useAppStore } from './store';
 import { useWebSocket } from './hooks/useWebSocket';
-import { Sun, Moon, Plus, X, Terminal, GitBranch, CheckCircle, Settings, Layers, GitPullRequest } from 'lucide-react';
+import { Sun, Moon, Plus, X, Terminal, GitBranch, Settings, Layers, GitPullRequest, CheckCircle } from 'lucide-react';
 import { SessionPanel } from './components/SessionPanel';
 import { PRStatusPanel } from './components/PRStatusPanel';
 import { autoLoadProjects } from './services/projectValidation';
@@ -20,20 +22,27 @@ const settingsAdapter = new RestSettingsAdapter();
 
 function App() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const { projects, activeProjectId, addProject, addProjects, removeProject, setActiveProject, setSelectedTab, theme, setTheme, connected, setTerminalSettings, terminalSessions } = useAppStore();
+  const {
+    projects, activeProjectId, addProject, addProjects, removeProject,
+    setActiveProject, setSelectedWorktree, setSelectedTab,
+    theme, setTheme, connected, setTerminalSettings, terminalSessions,
+    removeWorktreeFromProject, removeTerminalSession
+  } = useAppStore();
   const { connect } = useWebSocket();
+
   const [showProjectSelector, setShowProjectSelector] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showSessionPanel, setShowSessionPanel] = useState(false);
   const [showPRPanel, setShowPRPanel] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [autoLoadAttempted, setAutoLoadAttempted] = useState(false);
   const [showSuccessNotification, setShowSuccessNotification] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
-  
-  // const activeProject = getActiveProject();
+  const [mobileView, setMobileView] = useState<MobileView>('terminal');
+
+  const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
 
   useEffect(() => {
-    // Auto-connect on mount
     connect();
   }, []);
 
@@ -42,56 +51,32 @@ function App() {
     if (connected && !autoLoadAttempted && projects.length === 0) {
       const loadProjects = async () => {
         try {
-          // Get auto-load configuration from backend
           const autoLoadResponse = await autoLoadProjects();
-          
           if (autoLoadResponse.validationResults.length > 0) {
             const validPaths = autoLoadResponse.validationResults
-              .filter(result => result.valid)
-              .map(result => result.path);
-            
+              .filter((r) => r.valid)
+              .map((r) => r.path);
             if (validPaths.length > 0) {
-              // Add valid projects
               const addedIds = addProjects(validPaths);
-              
-              // Set default project if specified by backend
               if (autoLoadResponse.defaultProjectPath) {
                 const defaultIndex = validPaths.indexOf(autoLoadResponse.defaultProjectPath);
-                if (defaultIndex >= 0) {
-                  const defaultId = addedIds[defaultIndex];
-                  setActiveProject(defaultId);
-                }
+                if (defaultIndex >= 0) setActiveProject(addedIds[defaultIndex]);
               }
-              
-              console.log(`Auto-loaded ${validPaths.length} projects`);
-              
-              // Show success notification
-              setSuccessMessage(`Successfully auto-loaded ${validPaths.length} project${validPaths.length === 1 ? '' : 's'}`);
+              setSuccessMessage(`Auto-loaded ${validPaths.length} project${validPaths.length === 1 ? '' : 's'}`);
               setShowSuccessNotification(true);
-              
-              // Auto-hide notification after 3 seconds
-              setTimeout(() => {
-                setShowSuccessNotification(false);
-              }, 3000);
-            }
-            
-            // Log validation errors for invalid paths
-            const invalidResults = autoLoadResponse.validationResults.filter(result => !result.valid);
-            if (invalidResults.length > 0) {
-              console.warn('Some projects failed validation:', invalidResults);
+              setTimeout(() => setShowSuccessNotification(false), 3000);
             }
           }
-        } catch (error) {
-          console.error('Auto-load failed:', error);
+        } catch (err) {
+          console.error('Auto-load failed:', err);
         }
-        
         setAutoLoadAttempted(true);
       };
-      
       loadProjects();
     }
   }, [connected, autoLoadAttempted, projects.length, addProjects, setActiveProject]);
 
+  // Load terminal settings on connect
   useEffect(() => {
     if (!connected) return;
     let cancelled = false;
@@ -101,37 +86,29 @@ function App() {
     return () => { cancelled = true; };
   }, [connected, setTerminalSettings]);
 
+  // Theme init
   useEffect(() => {
-    // Initialize theme from localStorage or system preference
-    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
-    if (savedTheme) {
-      setTheme(savedTheme);
+    const saved = localStorage.getItem('theme') as 'light' | 'dark' | null;
+    if (saved) {
+      setTheme(saved);
     } else {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      setTheme(systemTheme);
+      setTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     }
   }, [setTheme]);
 
   useEffect(() => {
-    // Apply theme class to document
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
   const toggleTheme = () => {
-    const newTheme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(newTheme);
-    localStorage.setItem('theme', newTheme);
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    localStorage.setItem('theme', next);
   };
 
   const handleSelectProject = async (path: string) => {
     addProject(path);
     setShowProjectSelector(false);
-
-    // Persist to database for next session
     try {
       const httpUrl = await getServerHttpUrl();
       await fetch(`${httpUrl}/api/projects/recent`, {
@@ -140,7 +117,7 @@ function App() {
         body: JSON.stringify({ path }),
       });
     } catch {
-      // Non-critical — project is already loaded in memory
+      // Non-critical
     }
   };
 
@@ -149,82 +126,119 @@ function App() {
     removeProject(projectId);
   };
 
-  // Show login page if not authenticated and not loading
+  const handleMobileViewChange = (view: MobileView) => {
+    setMobileView(view);
+    if (view === 'terminal' && activeProject) {
+      setSelectedTab(activeProject.id, 'terminal');
+    } else if (view === 'changes' && activeProject) {
+      setSelectedTab(activeProject.id, 'changes');
+    }
+  };
+
+  // Login screen
   if (!authLoading && !isAuthenticated) {
     return <LoginPage />;
   }
 
-  // Show project selector if no projects exist or explicitly requested
+  // Project selector (full screen) when no projects or explicitly requested
   if (projects.length === 0 || showProjectSelector) {
     return (
       <div className="h-screen flex flex-col bg-background">
-        {/* Header */}
-        <header className="h-14 border-b flex items-center justify-between px-4 flex-shrink-0">
+        <header className="h-12 border-b flex items-center justify-between px-4 flex-shrink-0">
+          <span className="text-sm font-semibold">VibeTree</span>
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-semibold">VibeTree</h1>
-            <span className="text-xs text-muted-foreground hidden sm:inline">Web Terminal</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={toggleTheme}
-              className="p-2 hover:bg-accent rounded-md transition-colors"
-              aria-label="Toggle theme"
-            >
-              {theme === 'dark' ? (
-                <Sun className="h-4 w-4" />
-              ) : (
-                <Moon className="h-4 w-4" />
-              )}
+            <button onClick={toggleTheme} className="p-2 hover:bg-accent rounded-md transition-colors" aria-label="Toggle theme">
+              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
             <ConnectionStatus />
           </div>
         </header>
-
-        {/* Project Selector */}
         <ProjectSelector onSelectProject={handleSelectProject} />
       </div>
     );
   }
 
+  const worktreeSelected = !!activeProject?.selectedWorktree;
+  const selectedTab = activeProject?.selectedTab ?? 'terminal';
+
+  // On mobile, derive the view from selectedTab when worktree is active
+  const effectiveMobileView: MobileView = (() => {
+    if (mobileView === 'projects') return 'projects';
+    if (!worktreeSelected) return mobileView;
+    return selectedTab === 'changes' ? 'changes' : 'terminal';
+  })();
+
   return (
     <div className="h-screen flex flex-col bg-background">
-      {/* Success Notification Banner */}
+      {/* Success Notification */}
       {showSuccessNotification && (
-        <div className="bg-green-50 dark:bg-green-900/20 border-b border-green-200 dark:border-green-800 px-4 py-2">
+        <div className="bg-green-50 dark:bg-green-900/20 border-b border-green-200 dark:border-green-800 px-4 py-2 flex-shrink-0">
           <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
             <CheckCircle className="h-4 w-4" />
             <span className="text-sm font-medium">{successMessage}</span>
-            <button 
-              onClick={() => setShowSuccessNotification(false)}
-              className="ml-auto hover:bg-green-100 dark:hover:bg-green-800/30 rounded p-1"
-            >
+            <button onClick={() => setShowSuccessNotification(false)} className="ml-auto hover:bg-green-100 dark:hover:bg-green-800/30 rounded p-1">
               <X className="h-3 w-3" />
             </button>
           </div>
         </div>
       )}
 
-      {/* Header */}
-      <header className="h-14 border-b flex items-center justify-between px-4 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <h1 className="text-lg font-semibold">VibeTree</h1>
-          <span className="text-xs text-muted-foreground hidden sm:inline">Web Terminal</span>
+      {/* ── Header ─────────────────────────────────────────────── */}
+      <header className="h-12 border-b flex items-center px-3 gap-2 flex-shrink-0">
+        {/* Logo */}
+        <span className="text-sm font-semibold flex-shrink-0 mr-1">VibeTree</span>
+
+        {/* Desktop: project chips */}
+        <div className="hidden md:flex items-center gap-1 flex-1 overflow-x-auto min-w-0">
+          {projects.map((project) => {
+            const hasActiveSessions = project.worktrees?.some((wt) => terminalSessions.has(wt.path));
+            const isActive = project.id === activeProjectId;
+            return (
+              <button
+                key={project.id}
+                onClick={() => setActiveProject(project.id)}
+                className={`relative flex items-center gap-1.5 pl-3 pr-7 h-7 text-xs rounded flex-shrink-0 transition-colors whitespace-nowrap ${
+                  isActive
+                    ? 'bg-accent text-foreground border border-border'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                }`}
+              >
+                {project.name}
+                {hasActiveSessions && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
+                )}
+                <span
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-4 w-4 inline-flex items-center justify-center rounded hover:bg-muted/80 text-muted-foreground"
+                  onClick={(e) => handleCloseProject(e, project.id)}
+                  role="button"
+                  aria-label={`Close ${project.name}`}
+                >
+                  <X className="h-2.5 w-2.5" />
+                </span>
+              </button>
+            );
+          })}
+          <button
+            onClick={() => setShowProjectSelector(true)}
+            className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground flex-shrink-0"
+            aria-label="Add project"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
         </div>
-        <div className="flex items-center gap-2">
+
+        {/* Mobile: active project name + project switcher */}
+        <div className="flex md:hidden items-center gap-2 flex-1 min-w-0">
           <button
-            onClick={() => setShowPRPanel((v) => !v)}
-            className="p-2 hover:bg-accent rounded-md transition-colors"
-            aria-label="Pull Requests"
+            onClick={() => handleMobileViewChange('projects')}
+            className="text-sm font-medium truncate text-left flex-1"
           >
-            <GitPullRequest className="h-4 w-4" />
+            {activeProject?.name ?? 'VibeTree'}
           </button>
-          <button
-            onClick={() => setShowSessionPanel((v) => !v)}
-            className="p-2 hover:bg-accent rounded-md transition-colors"
-            aria-label="Sessions"
-          >
-            <Layers className="h-4 w-4" />
-          </button>
+        </div>
+
+        {/* Icon buttons */}
+        <div className="flex items-center gap-1 flex-shrink-0">
           <button
             onClick={() => setShowSettings(true)}
             className="p-2 hover:bg-accent rounded-md transition-colors"
@@ -237,150 +251,190 @@ function App() {
             className="p-2 hover:bg-accent rounded-md transition-colors"
             aria-label="Toggle theme"
           >
-            {theme === 'dark' ? (
-              <Sun className="h-4 w-4" />
-            ) : (
-              <Moon className="h-4 w-4" />
-            )}
+            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
           <ConnectionStatus />
-          <SettingsDialog
-            adapter={settingsAdapter}
-            open={showSettings}
-            onClose={() => setShowSettings(false)}
-            onSettingsChange={setTerminalSettings}
-          />
-          {showPRPanel && activeProjectId && (
-            <PRStatusPanel
-              projectPath={projects.find((p) => p.id === activeProjectId)?.path ?? ''}
-              onClose={() => setShowPRPanel(false)}
-            />
-          )}
-          {showSessionPanel && activeProjectId && (
-            <SessionPanel
-              projectPath={projects.find((p) => p.id === activeProjectId)?.path ?? ''}
-              onClose={() => setShowSessionPanel(false)}
-            />
-          )}
         </div>
       </header>
 
-      {/* Project Tabs and Content */}
-      <Tabs 
-        value={activeProjectId || ''} 
-        onValueChange={setActiveProject}
-        className="flex-1 flex flex-col"
-      >
-        <div className="border-b flex items-center gap-2 bg-muted/50 h-10">
-          <TabsList className="h-full bg-transparent p-0 rounded-none">
-            {projects.map((project) => {
-              const hasActiveSessions = project.worktrees?.some(wt => terminalSessions.has(wt.path));
-              return (
-                <TabsTrigger
-                  key={project.id}
-                  value={project.id}
-                  className="relative pr-8 h-full data-[state=active]:bg-background data-[state=active]:rounded-t-md data-[state=active]:border-t data-[state=active]:border-x data-[state=active]:border-b-0"
-                >
-                  <span className="flex items-center gap-1.5">
-                    {project.name}
-                    {hasActiveSessions && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-green-400 flex-shrink-0" />
-                    )}
-                  </span>
-                  <span
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5 p-0.5 hover:bg-muted rounded cursor-pointer inline-flex items-center justify-center"
-                    onClick={(e) => handleCloseProject(e, project.id)}
-                  >
-                    <X className="h-3 w-3" />
-                  </span>
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
-          <button
-            onClick={() => setShowProjectSelector(true)}
-            className="h-8 w-8 p-0 hover:bg-accent rounded transition-colors inline-flex items-center justify-center"
-            aria-label="Add project"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
+      {/* ── Worktree Strip (desktop always, mobile when not in projects view) ── */}
+      {activeProjectId && (
+        <div className={effectiveMobileView === 'projects' ? 'hidden md:block' : ''}>
+          <WorktreeStrip
+            projectId={activeProjectId}
+            onCreateWorktree={() => setShowCreateDialog(true)}
+          />
         </div>
+      )}
 
-        {projects.map((project) => (
-          <TabsContent 
-            key={project.id} 
-            value={project.id}
-            className="flex-1 m-0 h-0"
-          >
-            <div className="flex h-full overflow-hidden">
-              {/* Worktree Panel - Always visible on desktop, conditional on mobile */}
-              <div className={`
-                ${project.selectedWorktree ? 'hidden md:flex' : 'flex'} 
-                w-full md:w-80 border-r flex-shrink-0
-              `}>
-                <WorktreePanel projectId={project.id} />
-              </div>
+      {/* ── Content Tab Bar (only when worktree selected) ─────── */}
+      {activeProjectId && worktreeSelected && (
+        <div className={`h-9 border-b flex items-center px-3 flex-shrink-0 bg-muted/20 ${effectiveMobileView === 'projects' ? 'hidden md:flex' : ''}`}>
+          <div className="flex gap-1">
+            <button
+              onClick={() => { setSelectedTab(activeProjectId, 'terminal'); setMobileView('terminal'); }}
+              className={`px-3 py-1.5 text-xs rounded flex items-center gap-1.5 transition-colors ${
+                selectedTab === 'terminal'
+                  ? 'bg-background text-foreground border shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+              }`}
+            >
+              <Terminal className="h-3.5 w-3.5" />
+              Terminal
+            </button>
+            <button
+              onClick={() => { setSelectedTab(activeProjectId, 'changes'); setMobileView('changes'); }}
+              className={`px-3 py-1.5 text-xs rounded flex items-center gap-1.5 transition-colors ${
+                selectedTab === 'changes'
+                  ? 'bg-background text-foreground border shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+              }`}
+            >
+              <GitBranch className="h-3.5 w-3.5" />
+              Changes
+            </button>
+          </div>
+          <div className="ml-auto flex gap-1">
+            <button
+              onClick={() => setShowSessionPanel((v) => !v)}
+              className={`px-3 py-1.5 text-xs rounded flex items-center gap-1.5 transition-colors ${
+                showSessionPanel
+                  ? 'bg-background text-foreground border shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+              }`}
+              aria-label="Sessions"
+            >
+              <Layers className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Sessions</span>
+            </button>
+            <button
+              onClick={() => setShowPRPanel((v) => !v)}
+              className={`px-3 py-1.5 text-xs rounded flex items-center gap-1.5 transition-colors ${
+                showPRPanel
+                  ? 'bg-background text-foreground border shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+              }`}
+              aria-label="Pull Requests"
+            >
+              <GitPullRequest className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">PRs</span>
+            </button>
+          </div>
+        </div>
+      )}
 
-              {/* Main Content Area with Tabs - Only shown when worktree is selected */}
-              {project.selectedWorktree ? (
-                <div className="flex-1 flex flex-col h-full">
-                  {/* Tab Navigation */}
-                  <div className="h-10 border-b flex items-center px-2 bg-muted/30 flex-shrink-0">
-                    <div className="flex">
-                      <button
-                        className={`px-3 py-1.5 text-sm rounded-md transition-colors flex items-center gap-1.5 ${
-                          project.selectedTab === 'terminal'
-                            ? 'bg-background text-foreground border shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                        }`}
-                        onClick={() => setSelectedTab(project.id, 'terminal')}
-                      >
-                        <Terminal className="h-3.5 w-3.5" />
-                        Terminal
-                      </button>
-                      <button
-                        className={`px-3 py-1.5 text-sm rounded-md transition-colors flex items-center gap-1.5 ml-1 ${
-                          project.selectedTab === 'changes'
-                            ? 'bg-background text-foreground border shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                        }`}
-                        onClick={() => setSelectedTab(project.id, 'changes')}
-                      >
-                        <GitBranch className="h-3.5 w-3.5" />
-                        Changes
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Tab Content */}
-                  <div className="flex-1 overflow-hidden relative">
-                    {/* Terminal Tab - Managed terminals with lifecycle control */}
-                    <div className={`absolute inset-0 ${project.selectedTab === 'terminal' ? 'block' : 'hidden'}`}>
-                      <TerminalManager 
-                        worktrees={project.worktrees || []}
-                        selectedWorktree={project.selectedWorktree}
-                      />
-                    </div>
-                    
-                    {/* Keep GitDiffView mounted but hidden to preserve state */}
-                    <div className={`absolute inset-0 ${project.selectedTab === 'changes' ? 'block' : 'hidden'}`}>
-                      <GitDiffView worktreePath={project.selectedWorktree} theme={theme} />
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                /* Empty state when no worktree selected */
-                <div className="hidden md:flex flex-1 items-center justify-center text-muted-foreground">
-                  <div className="text-center">
-                    <p className="text-lg mb-2">Select a worktree to start</p>
-                    <p className="text-sm">Choose from the panel on the left</p>
-                  </div>
-                </div>
-              )}
+      {/* ── Content Area ───────────────────────────────────────── */}
+      <div className="flex-1 overflow-hidden relative">
+        {/* Mobile: project list view */}
+        {effectiveMobileView === 'projects' && (
+          <div className="md:hidden absolute inset-0 overflow-y-auto p-4">
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-3">Projects</p>
+              {projects.map((project) => (
+                <button
+                  key={project.id}
+                  onClick={() => { setActiveProject(project.id); setMobileView('terminal'); }}
+                  className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                    project.id === activeProjectId
+                      ? 'border-blue-400 bg-blue-400/10'
+                      : 'border-border hover:bg-accent/50'
+                  }`}
+                >
+                  <div className="font-medium text-sm">{project.name}</div>
+                  <div className="text-xs text-muted-foreground truncate mt-0.5">{project.path}</div>
+                </button>
+              ))}
+              <button
+                onClick={() => setShowProjectSelector(true)}
+                className="w-full p-3 rounded-lg border border-dashed border-muted-foreground/40 text-sm text-muted-foreground hover:text-foreground hover:border-muted-foreground transition-colors text-center"
+              >
+                + Add Project
+              </button>
             </div>
-          </TabsContent>
-        ))}
-      </Tabs>
+          </div>
+        )}
+
+        {/* Desktop + mobile non-projects: terminal/changes content */}
+        <div className={effectiveMobileView === 'projects' ? 'hidden md:block absolute inset-0' : 'absolute inset-0'}>
+          {!activeProjectId ? (
+            <div className="flex items-center justify-center h-full text-muted-foreground">
+              <div className="text-center">
+                <p className="text-base mb-1">No project selected</p>
+                <button
+                  onClick={() => setShowProjectSelector(true)}
+                  className="text-sm text-blue-400 hover:underline"
+                >
+                  Add a project
+                </button>
+              </div>
+            </div>
+          ) : !worktreeSelected ? (
+            <div className="flex items-center justify-center h-full text-muted-foreground">
+              <div className="text-center">
+                <p className="text-base mb-1">Select a worktree</p>
+                <p className="text-sm">Choose from the strip above</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className={`absolute inset-0 ${selectedTab === 'terminal' ? 'block' : 'hidden'}`}>
+                <TerminalManager
+                  worktrees={activeProject?.worktrees ?? []}
+                  selectedWorktree={activeProject?.selectedWorktree ?? null}
+                  projectPath={activeProject?.path ?? ''}
+                  mainWorktreePath={activeProject?.worktrees.find(wt => {
+                    const b = (wt.branch ?? '').replace('refs/heads/', '');
+                    return b === 'main' || b === 'master';
+                  })?.path ?? activeProject?.path ?? ''}
+                  onWorktreeRemoved={() => {
+                    if (activeProjectId && activeProject?.selectedWorktree) {
+                      removeWorktreeFromProject(activeProjectId, activeProject.selectedWorktree);
+                      removeTerminalSession(activeProject.selectedWorktree);
+                    }
+                  }}
+                />
+              </div>
+              <div className={`absolute inset-0 ${selectedTab === 'changes' ? 'block' : 'hidden'}`}>
+                <GitDiffView worktreePath={activeProject!.selectedWorktree!} theme={theme} />
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ── Mobile Bottom Nav ──────────────────────────────────── */}
+      <MobileBottomNav activeView={effectiveMobileView} onChange={handleMobileViewChange} />
+
+      {/* ── Overlays / Dialogs ─────────────────────────────────── */}
+      <SettingsDialog
+        adapter={settingsAdapter}
+        open={showSettings}
+        onClose={() => setShowSettings(false)}
+        onSettingsChange={setTerminalSettings}
+      />
+
+      {activeProjectId && (
+        <CreateWorktreeDialog
+          projectId={activeProjectId}
+          open={showCreateDialog}
+          onClose={() => setShowCreateDialog(false)}
+          onCreated={(path) => setSelectedWorktree(activeProjectId, path)}
+        />
+      )}
+
+      {showPRPanel && activeProjectId && (
+        <PRStatusPanel
+          projectPath={activeProject?.path ?? ''}
+          onClose={() => setShowPRPanel(false)}
+        />
+      )}
+
+      {showSessionPanel && activeProjectId && (
+        <SessionPanel
+          projectPath={activeProject?.path ?? ''}
+          onClose={() => setShowSessionPanel(false)}
+        />
+      )}
     </div>
   );
 }

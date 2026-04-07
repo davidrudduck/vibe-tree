@@ -141,8 +141,8 @@ Possible solutions:
   setupWebSocketHandlers(wss, { shellManager, authService });
 
   // Health check endpoint
-  app.get('/health', (req, res) => {
-    res.json({ status: 'ok', version: '0.0.1' });
+  app.get('/health', (_req, res) => {
+    res.json({ status: 'ok', version: '0.0.1', vibetree: true });
   });
 
   // Root endpoint - provide server info

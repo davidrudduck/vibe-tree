@@ -6,9 +6,12 @@ import { useAppStore } from '../store';
 interface TerminalManagerProps {
   worktrees: Array<{ path: string; branch?: string; head: string }>;
   selectedWorktree: string | null;
+  projectPath: string;
+  mainWorktreePath: string;
+  onWorktreeRemoved?: () => void;
 }
 
-export function TerminalManager({ worktrees, selectedWorktree }: TerminalManagerProps) {
+export function TerminalManager({ worktrees, selectedWorktree, projectPath, mainWorktreePath, onWorktreeRemoved }: TerminalManagerProps) {
   const { terminalSessions, removeTerminalSession } = useAppStore();
   const [mountedTerminals, setMountedTerminals] = useState<Set<string>>(new Set());
   const [activeTerminals, setActiveTerminals] = useState<Set<string>>(new Set());
@@ -90,7 +93,7 @@ export function TerminalManager({ worktrees, selectedWorktree }: TerminalManager
       <div className="flex items-center justify-center h-full text-muted-foreground">
         <div className="text-center">
           <p className="text-lg mb-2">Select a worktree to start</p>
-          <p className="text-sm">Choose from the panel on the left</p>
+          <p className="text-sm">Choose from the worktree strip above</p>
         </div>
       </div>
     );
@@ -107,8 +110,11 @@ export function TerminalManager({ worktrees, selectedWorktree }: TerminalManager
         <WorktreeInfo
           worktreePath={selectedWorktree}
           branch={selectedWorktreeData?.branch ?? selectedWorktreeData?.head.substring(0, 8) ?? ''}
+          projectPath={projectPath}
+          mainWorktreePath={mainWorktreePath}
           onStartTerminal={() => handleStartTerminal(selectedWorktree)}
           onReconnect={() => handleStartTerminal(selectedWorktree)}
+          onWorktreeRemoved={onWorktreeRemoved}
         />
       )}
 

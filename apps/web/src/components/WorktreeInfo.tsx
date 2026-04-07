@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { GitBranch, Terminal, RotateCcw } from 'lucide-react';
+import { GitBranch, Terminal, RotateCcw, GitMerge, Trash2 } from 'lucide-react';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { MergeToMainDialog } from './MergeToMainDialog';
+import { CleanupWorktreeDialog } from './CleanupWorktreeDialog';
 
 interface TerminalSession {
   id: string;
@@ -16,14 +18,19 @@ interface WorktreeInfoProps {
   worktreePath: string;
   branch: string;
   aheadBehind?: { ahead: number; behind: number };
+  projectPath: string;
+  mainWorktreePath: string;
   onStartTerminal: () => void;
   onReconnect: () => void;
+  onWorktreeRemoved?: () => void;
 }
 
-export function WorktreeInfo({ worktreePath, branch, aheadBehind, onStartTerminal, onReconnect }: WorktreeInfoProps) {
+export function WorktreeInfo({ worktreePath, branch, aheadBehind, projectPath, mainWorktreePath, onStartTerminal, onReconnect, onWorktreeRemoved }: WorktreeInfoProps) {
   const { getAdapter } = useWebSocket();
   const [sessions, setSessions] = useState<TerminalSession[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(true);
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [showCleanupDialog, setShowCleanupDialog] = useState(false);
 
   useEffect(() => {
     const adapter = getAdapter();
@@ -52,6 +59,7 @@ export function WorktreeInfo({ worktreePath, branch, aheadBehind, onStartTermina
   }, [worktreePath, getAdapter]);
 
   const displayBranch = branch.replace('refs/heads/', '');
+  const isMainBranch = displayBranch === 'main' || displayBranch === 'master';
   const displayPath = worktreePath.split('/').slice(-2).join('/');
 
   return (
@@ -85,11 +93,30 @@ export function WorktreeInfo({ worktreePath, branch, aheadBehind, onStartTermina
         {/* New Terminal button */}
         <button
           onClick={onStartTerminal}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-md bg-green-600 hover:bg-green-500 text-white font-medium transition-colors mb-6"
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-md bg-green-600 hover:bg-green-500 text-white font-medium transition-colors mb-4"
         >
           <Terminal className="h-4 w-4" />
           New Terminal
         </button>
+
+        {!isMainBranch && (
+          <div className="flex gap-2 w-full mb-4">
+            <button
+              onClick={() => setShowMergeDialog(true)}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md border border-blue-500 text-blue-500 hover:bg-blue-500/10 text-sm font-medium transition-colors"
+            >
+              <GitMerge className="h-4 w-4" />
+              Merge to main
+            </button>
+            <button
+              onClick={() => setShowCleanupDialog(true)}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md border border-red-500 text-red-500 hover:bg-red-500/10 text-sm font-medium transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+              Clean up
+            </button>
+          </div>
+        )}
 
         {/* Existing sessions */}
         {!loadingSessions && sessions.length > 0 && (
@@ -120,6 +147,23 @@ export function WorktreeInfo({ worktreePath, branch, aheadBehind, onStartTermina
           </div>
         )}
       </div>
+      <MergeToMainDialog
+        projectPath={projectPath}
+        branchName={displayBranch}
+        mainWorktreePath={mainWorktreePath}
+        aheadBehind={aheadBehind}
+        open={showMergeDialog}
+        onClose={() => setShowMergeDialog(false)}
+        onMerged={() => { setShowMergeDialog(false); onWorktreeRemoved?.(); }}
+      />
+      <CleanupWorktreeDialog
+        projectPath={projectPath}
+        worktreePath={worktreePath}
+        branchName={displayBranch}
+        open={showCleanupDialog}
+        onClose={() => setShowCleanupDialog(false)}
+        onCleaned={() => { setShowCleanupDialog(false); onWorktreeRemoved?.(); }}
+      />
     </div>
   );
 }

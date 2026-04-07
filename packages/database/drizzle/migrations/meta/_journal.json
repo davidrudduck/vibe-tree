@@ -15,6 +15,13 @@
       "when": 1775448097223,
       "tag": "0001_busy_daimon_hellstrom",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1744000000000,
+      "tag": "0002_add_is_external_to_sessions",
+      "breakpoints": true
     }
   ]
 }

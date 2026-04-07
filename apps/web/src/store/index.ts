@@ -41,6 +41,7 @@ interface AppState {
   updateProjectWorktrees: (id: string, worktrees: Worktree[]) => void;
   setSelectedWorktree: (projectId: string, worktreePath: string | null) => void;
   setSelectedTab: (projectId: string, tab: 'terminal' | 'changes') => void;
+  removeWorktreeFromProject: (projectId: string, worktreePath: string) => void;
   getProject: (id: string) => Project | undefined;
   getActiveProject: () => Project | undefined;
   addTerminalSession: (worktreePath: string, sessionId: string) => void;
@@ -170,12 +171,25 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSelectedTab: (projectId: string, tab: 'terminal' | 'changes') => {
     set((state) => ({
       projects: state.projects.map(project =>
-        project.id === projectId 
+        project.id === projectId
           ? { ...project, selectedTab: tab }
           : project
       )
     }));
   },
+
+  removeWorktreeFromProject: (projectId: string, worktreePath: string) =>
+    set((state) => ({
+      projects: state.projects.map((project) =>
+        project.id === projectId
+          ? {
+              ...project,
+              worktrees: project.worktrees.filter((wt) => wt.path !== worktreePath),
+              selectedWorktree: project.selectedWorktree === worktreePath ? null : project.selectedWorktree,
+            }
+          : project
+      ),
+    })),
 
   getProject: (id: string) => {
     return get().projects.find(p => p.id === id);
