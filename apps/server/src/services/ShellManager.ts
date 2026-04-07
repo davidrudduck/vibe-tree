@@ -1,5 +1,5 @@
 import * as pty from 'node-pty';
-import { SessionManagerFactory, ShellSessionManager, TmuxSessionManager } from '@vibetree/core';
+import { SessionManagerFactory, ShellSessionManager, TmuxSessionManager, type ShellStartResult } from '@vibetree/core';
 
 /**
  * Server shell manager - uses SessionManagerFactory for automatic tmux/PTY selection
@@ -82,5 +82,21 @@ export class ShellManager {
   async removeExitListener(sessionId: string, connectionId: string) {
     await this.initialize();
     return this.sessionManager!.removeExitListener(sessionId, connectionId);
+  }
+
+  /**
+   * Attach to an externally-linked tmux session by its known name and session ID.
+   * Falls back to startShell for PTY-based managers.
+   */
+  async attachExternalSession(sessionId: string, tmuxName: string, worktreePath: string): Promise<ShellStartResult> {
+    await this.initialize();
+    if (this.sessionManager instanceof TmuxSessionManager) {
+      return this.sessionManager.attachExternalSession(sessionId, tmuxName, worktreePath);
+    }
+    // PTY mode has no concept of named external sessions — surface the broken link
+    return {
+      success: false,
+      error: 'Linked tmux sessions can only be reattached when the tmux backend is active',
+    };
   }
 }

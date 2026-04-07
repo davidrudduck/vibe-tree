@@ -249,6 +249,49 @@ export class TmuxSessionManager {
   }
 
   /**
+   * Attach to an externally-linked tmux session by its known name and session ID.
+   * Used when a session was linked via the UI and we need to reconnect to it.
+   */
+  async attachExternalSession(sessionId: string, tmuxName: string, worktreePath: string): Promise<ShellStartResult> {
+    // Validate session name to prevent shell injection (names come from external clients)
+    if (!/^[a-zA-Z0-9._-]+$/.test(tmuxName)) {
+      return { success: false, error: `Invalid tmux session name: '${tmuxName}'` };
+    }
+
+    // Always verify liveness first — the in-memory record may be stale if tmux was killed externally
+    const exists = await this.tmuxSessionExists(tmuxName);
+    if (!exists) {
+      this.sessions.delete(sessionId);
+      return { success: false, error: `Tmux session '${tmuxName}' no longer exists` };
+    }
+
+    // Already tracked in memory — reuse it
+    const existing = this.sessions.get(sessionId);
+    if (existing) {
+      existing.lastActivity = new Date();
+      return { success: true, processId: sessionId, isNew: false };
+    }
+
+    await this.attachToExistingSession(sessionId, tmuxName, worktreePath);
+
+    // Seed the output buffer with the current pane contents so the client
+    // doesn't open to a blank terminal on first attach
+    try {
+      const { stdout } = await execAsync(`tmux capture-pane -t ${tmuxName} -p`);
+      if (stdout) {
+        const session = this.sessions.get(sessionId);
+        if (session) {
+          session.outputBuffer.unshift(stdout);
+        }
+      }
+    } catch {
+      // Non-fatal — pane capture is best-effort
+    }
+
+    return { success: true, processId: sessionId, isNew: false };
+  }
+
+  /**
    * Attach to an existing tmux session that wasn't tracked in our sessions map
    */
   private async attachToExistingSession(sessionId: string, tmuxName: string, worktreePath: string): Promise<void> {

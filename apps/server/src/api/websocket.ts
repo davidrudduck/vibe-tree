@@ -174,24 +174,46 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
         // Handle different message types
         switch (message.type) {
           case 'shell:start': {
-            const result = await shellManager.startShell(
-              message.payload.worktreePath,
-              deviceId || undefined,
-              message.payload.cols,
-              message.payload.rows,
-              message.payload.forceNew
-            );
-            
+            // Check if this worktree has a linked external tmux session.
+            // Sort by lastActivity desc to pick the most recently active link when
+            // multiple rows exist (e.g. from repeated session:link calls).
+            const linkedExternal = !message.payload.forceNew
+              ? (databaseService as any).terminalSessions
+                  ?.findByWorktree(message.payload.worktreePath)
+                  ?.filter((s: any) => s.isExternal)
+                  ?.sort((a: any, b: any) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime())
+                  ?.[0]
+              : undefined;
+
+            const result = linkedExternal
+              ? await shellManager.attachExternalSession(
+                  linkedExternal.id,
+                  linkedExternal.tmuxSessionName,
+                  message.payload.worktreePath
+                )
+              : await shellManager.startShell(
+                  message.payload.worktreePath,
+                  deviceId || undefined,
+                  message.payload.cols,
+                  message.payload.rows,
+                  message.payload.forceNew
+                );
+
             if (result.success && result.processId) {
               activeShellSessions.add(result.processId);
+
+              const tmuxSessionName = linkedExternal
+                ? linkedExternal.tmuxSessionName
+                : `vt-${result.processId.substring(0, 8)}`;
 
               // Persist session to database (optional chaining in case terminalSessions isn't available yet)
               (databaseService as any).terminalSessions?.upsert({
                 id: result.processId,
                 projectPath: message.payload.projectPath || message.payload.worktreePath,
                 worktreePath: message.payload.worktreePath,
-                tmuxSessionName: `vt-${result.processId.substring(0, 8)}`,
-                status: 'active'
+                tmuxSessionName,
+                status: 'active',
+                isExternal: !!linkedExternal,
               });
 
               // Set up output forwarding using the new listener methods
@@ -552,6 +574,10 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
           case 'session:link': {
             try {
               const { tmuxSessionName, projectPath, worktreePath } = message.payload;
+              if (!/^[a-zA-Z0-9._-]+$/.test(tmuxSessionName)) {
+                ws.send(JSON.stringify({ type: 'error', payload: { error: `Invalid tmux session name: '${tmuxSessionName}'` }, id: message.id }));
+                break;
+              }
               const sessionId = `ext-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
               const session = databaseService.terminalSessions.upsert({
                 id: sessionId,
