@@ -67,7 +67,7 @@ export function ReassignSessionDialog({ sessionId, currentWorktreePath, open, on
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[1100]">
       <div className="bg-background border rounded-lg shadow-lg w-full max-w-md">
         <div className="p-6">
           <h3 className="text-lg font-semibold mb-2">Reassign Session</h3>
