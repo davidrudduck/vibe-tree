@@ -42,7 +42,9 @@ export function CleanupWorktreeDialog({ projectPath, worktreePath, branchName, o
         setIsDirty(status.length > 0);
       })
       .catch(() => {
-        setIsDirty(false);
+        // Default to dirty on error — safer than assuming clean
+        setIsDirty(true);
+        setError('Could not verify worktree status — assuming uncommitted changes exist');
       })
       .finally(() => {
         setChecking(false);

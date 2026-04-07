@@ -1,4 +1,5 @@
 import { WebSocketServer, WebSocket } from 'ws';
+import { spawnSync } from 'child_process';
 import { ShellManager } from '../services/ShellManager';
 import { AuthService } from '../auth/AuthService';
 import { databaseService } from '../services/DatabaseService';
@@ -642,19 +643,19 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
                 }));
                 break;
               }
-              // Kill attached tmux sessions
-              const sessionsForWorktree = databaseService.terminalSessions.findByWorktree(worktreePath);
-              for (const session of sessionsForWorktree) {
-                try {
-                  const { execSync } = require('child_process');
-                  execSync(`tmux kill-session -t ${JSON.stringify(session.tmuxSessionName)}`, { encoding: 'utf8' });
-                } catch {
-                  // session may already be dead
-                }
-                databaseService.terminalSessions.delete(session.id);
-              }
-              // Remove the worktree
+              // Remove the worktree first; only clean up sessions on success
               const result = await removeWorktree(projectPath, worktreePath, branchName, force ?? false);
+              if (result.success) {
+                const sessionsForWorktree = databaseService.terminalSessions.findByWorktree(worktreePath);
+                for (const session of sessionsForWorktree) {
+                  try {
+                    spawnSync('tmux', ['kill-session', '-t', session.tmuxSessionName]);
+                  } catch {
+                    // session may already be dead
+                  }
+                  databaseService.terminalSessions.delete(session.id);
+                }
+              }
               ws.send(JSON.stringify({
                 type: 'git:worktree:cleanup:response',
                 payload: result,

@@ -60,9 +60,12 @@ async function discoverServerPort(): Promise<number> {
       });
 
       if (response.ok) {
-        cachedServerPort = port;
-        console.log(`✓ Discovered server port via scan: ${port}`);
-        return port;
+        const data = await response.json().catch(() => ({}));
+        if (data.vibetree === true) {
+          cachedServerPort = port;
+          console.log(`✓ Discovered server port via scan: ${port}`);
+          return port;
+        }
       }
     } catch {
       // Continue trying next port

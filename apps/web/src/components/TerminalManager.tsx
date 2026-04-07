@@ -93,7 +93,7 @@ export function TerminalManager({ worktrees, selectedWorktree, projectPath, main
       <div className="flex items-center justify-center h-full text-muted-foreground">
         <div className="text-center">
           <p className="text-lg mb-2">Select a worktree to start</p>
-          <p className="text-sm">Choose from the panel on the left</p>
+          <p className="text-sm">Choose from the worktree strip above</p>
         </div>
       </div>
     );

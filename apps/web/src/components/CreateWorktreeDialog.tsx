@@ -23,12 +23,27 @@ export function CreateWorktreeDialog({ projectId, open, onClose, onCreated }: Cr
 
   // Fetch branches when dialog opens
   useEffect(() => {
-    if (!open || !project) return;
+    if (!open || !project?.path) return;
     const adapter = getAdapter();
     if (!adapter) return;
-    adapter.getBranches(project.path).then(setBranches).catch(() => {});
+
+    let cancelled = false;
+    setBranches([]);
     setStartPoint('');
-  }, [open, project, getAdapter]);
+
+    adapter
+      .getBranches(project.path)
+      .then((next) => {
+        if (!cancelled) setBranches(next);
+      })
+      .catch(() => {
+        if (!cancelled) setBranches([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, project?.path, getAdapter]);
 
   // Reset state when dialog closes
   useEffect(() => {

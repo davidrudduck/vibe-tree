@@ -258,7 +258,7 @@ function App() {
       </header>
 
       {/* ── Worktree Strip (desktop always, mobile when not in projects view) ── */}
-      {activeProjectId && (effectiveMobileView !== 'projects' || true) && (
+      {activeProjectId && (
         <div className={effectiveMobileView === 'projects' ? 'hidden md:block' : ''}>
           <WorktreeStrip
             projectId={activeProjectId}

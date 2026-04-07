@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { DrizzleDB } from '../connection';
 import { terminalSessions, TerminalSession } from '../schema/sessions';
 
@@ -37,7 +37,9 @@ export class SessionRepository {
           worktreePath: data.worktreePath,
           tmuxSessionName: data.tmuxSessionName,
           status: data.status ?? 'active',
-          isExternal: data.isExternal ?? false,
+          isExternal: data.isExternal !== undefined
+            ? data.isExternal
+            : sql`${terminalSessions.isExternal}`,
           lastActivity: now,
         },
       })

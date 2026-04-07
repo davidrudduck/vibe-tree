@@ -40,6 +40,10 @@ export function ReassignSessionDialog({ sessionId, currentWorktreePath, open, on
 
   const handleConfirm = async () => {
     if (!selectedWorktreePath || loading) return;
+    if (selectedWorktreePath === currentWorktreePath) {
+      setError('Session is already assigned to this worktree');
+      return;
+    }
 
     const adapter = getAdapter() as WebSocketAdapter | null;
     if (!adapter) {

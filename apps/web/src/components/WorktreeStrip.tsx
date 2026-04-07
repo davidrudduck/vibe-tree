@@ -26,6 +26,14 @@ export function WorktreeStrip({ projectId, onCreateWorktree }: WorktreeStripProp
   const project = getProject(projectId);
   const adapter = getAdapter();
 
+  const reconcileSelection = (trees: { path: string }[]) => {
+    if (!project) return;
+    const currentSelected = project.selectedWorktree;
+    if (currentSelected && !trees.some((t) => t.path === currentSelected)) {
+      setSelectedWorktree(projectId, null);
+    }
+  };
+
   // Auto-load worktrees when project changes or connection established
   useEffect(() => {
     if (!project || !connected || loading || !adapter) return;
@@ -35,6 +43,7 @@ export function WorktreeStrip({ projectId, onCreateWorktree }: WorktreeStripProp
       try {
         const trees = await adapter.listWorktrees(project.path);
         updateProjectWorktrees(projectId, trees);
+        reconcileSelection(trees);
       } catch (err) {
         console.error('Failed to load worktrees:', err);
       } finally {
@@ -53,6 +62,7 @@ export function WorktreeStrip({ projectId, onCreateWorktree }: WorktreeStripProp
     try {
       const trees = await adapter.listWorktrees(project.path);
       updateProjectWorktrees(projectId, trees);
+      reconcileSelection(trees);
     } catch (err) {
       console.error('Failed to refresh worktrees:', err);
     } finally {
