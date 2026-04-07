@@ -197,6 +197,7 @@ export function SessionPanel({ projectPath, onClose }: SessionPanelProps) {
   };
 
   return (
+    <>
     <div style={overlayStyle} onClick={onClose} onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}>
       <div style={panelStyle} role="dialog" aria-modal="true" aria-label="Terminal Sessions" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
@@ -324,19 +325,20 @@ export function SessionPanel({ projectPath, onClose }: SessionPanelProps) {
           )}
         </div>
       </div>
-      <LinkSessionDialog
-        tmuxSessionName={linkingSession ?? ''}
-        open={linkingSession !== null}
-        onClose={() => setLinkingSession(null)}
-        onLinked={() => { setLinkingSession(null); fetchSessions(); }}
-      />
-      <ReassignSessionDialog
-        sessionId={reassigningSession?.id ?? ''}
-        currentWorktreePath={reassigningSession?.worktreePath ?? ''}
-        open={reassigningSession !== null}
-        onClose={() => setReassigningSession(null)}
-        onReassigned={() => { setReassigningSession(null); fetchSessions(); }}
-      />
     </div>
+    <LinkSessionDialog
+      tmuxSessionName={linkingSession ?? ''}
+      open={linkingSession !== null}
+      onClose={() => setLinkingSession(null)}
+      onLinked={() => { setLinkingSession(null); fetchSessions(); }}
+    />
+    <ReassignSessionDialog
+      sessionId={reassigningSession?.id ?? ''}
+      currentWorktreePath={reassigningSession?.worktreePath ?? ''}
+      open={reassigningSession !== null}
+      onClose={() => setReassigningSession(null)}
+      onReassigned={() => { setReassigningSession(null); fetchSessions(); }}
+    />
+    </>
   );
 }

@@ -170,18 +170,6 @@ function App() {
 
   return (
     <div className="h-screen flex flex-col bg-background">
-      {/* Success Notification */}
-      {showSuccessNotification && (
-        <div className="bg-green-50 dark:bg-green-900/20 border-b border-green-200 dark:border-green-800 px-4 py-2 flex-shrink-0">
-          <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
-            <CheckCircle className="h-4 w-4" />
-            <span className="text-sm font-medium">{successMessage}</span>
-            <button onClick={() => setShowSuccessNotification(false)} className="ml-auto hover:bg-green-100 dark:hover:bg-green-800/30 rounded p-1">
-              <X className="h-3 w-3" />
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* ── Header ─────────────────────────────────────────────── */}
       <header className="h-12 border-b flex items-center px-3 gap-2 flex-shrink-0">
@@ -434,6 +422,17 @@ function App() {
           projectPath={activeProject?.path ?? ''}
           onClose={() => setShowSessionPanel(false)}
         />
+      )}
+
+      {/* ── Success Toast (fixed bottom, doesn't shift layout) ─── */}
+      {showSuccessNotification && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[2000] flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg border bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 text-sm">
+          <CheckCircle className="h-4 w-4 flex-shrink-0" />
+          <span className="font-medium">{successMessage}</span>
+          <button onClick={() => setShowSuccessNotification(false)} className="ml-2 hover:bg-green-100 dark:hover:bg-green-800/40 rounded p-0.5">
+            <X className="h-3 w-3" />
+          </button>
+        </div>
       )}
     </div>
   );
