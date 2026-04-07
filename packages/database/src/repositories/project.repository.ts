@@ -1,4 +1,5 @@
 import { eq, desc, count, and } from 'drizzle-orm';
+import { existsSync } from 'fs';
 import { DrizzleDB } from '../connection';
 import { projects, projectSettings, Project, NewProject, ProjectSetting } from '../schema/projects';
 import { createId } from '@paralleldrive/cuid2';
@@ -225,7 +226,7 @@ export class ProjectRepository {
     const allProjects = this.findRecent(100);
     let pruned = 0;
     for (const project of allProjects) {
-      if (!require('fs').existsSync(project.path)) {
+      if (!existsSync(project.path)) {
         this.deleteByPath(project.path);
         pruned++;
       }

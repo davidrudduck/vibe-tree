@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { TerminalView } from './TerminalView';
 import { WorktreeInfo } from './WorktreeInfo';
 import { useAppStore } from '../store';
+import { useWebSocket } from '../hooks/useWebSocket';
 
 interface TerminalManagerProps {
   worktrees: Array<{ path: string; branch?: string; head: string }>;
@@ -15,9 +16,35 @@ export function TerminalManager({ worktrees, selectedWorktree, projectPath, main
   const { terminalSessions, removeTerminalSession } = useAppStore();
   const [mountedTerminals, setMountedTerminals] = useState<Set<string>>(new Set());
   const [activeTerminals, setActiveTerminals] = useState<Set<string>>(new Set());
+  const { getAdapter } = useWebSocket();
+  const [aheadBehind, setAheadBehind] = useState<Map<string, { ahead: number; behind: number }>>(new Map());
 
   // Track which terminals have been created
   const createdTerminals = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const adapter = getAdapter();
+    if (!adapter || worktrees.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const mainBranch = await adapter.getMainBranchName(projectPath).catch(() => 'main');
+        const results = new Map<string, { ahead: number; behind: number }>();
+        await Promise.all(
+          worktrees.map(async (wt) => {
+            try {
+              const ab = await (adapter as any).getAheadBehind(wt.path, mainBranch);
+              results.set(wt.path, ab);
+            } catch {
+              results.set(wt.path, { ahead: 0, behind: 0 });
+            }
+          })
+        );
+        if (!cancelled) setAheadBehind(results);
+      } catch { /* non-fatal */ }
+    })();
+    return () => { cancelled = true; };
+  }, [worktrees, projectPath, getAdapter]);
 
   // On mount, auto-activate worktrees that have a cached session (page refresh scenario).
   // terminalSessions is synchronously initialized from localStorage before first render.
@@ -72,6 +99,16 @@ export function TerminalManager({ worktrees, selectedWorktree, projectPath, main
     }
   }, [worktrees, removeTerminalSession]);
 
+  // When the selected worktree changes, the newly visible terminal goes from
+  // display:none → display:block. ResizeObserver on the terminal element won't
+  // fire for ancestor display changes, so we dispatch a resize event to trigger
+  // FitAddon to re-measure and fill the available space.
+  useEffect(() => {
+    if (!selectedWorktree) return;
+    const timer = setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
+    return () => clearTimeout(timer);
+  }, [selectedWorktree]);
+
   const handleStartTerminal = (worktreePath: string) => {
     setActiveTerminals((prev) => new Set(prev).add(worktreePath));
     if (!mountedTerminals.has(worktreePath)) {
@@ -112,6 +149,7 @@ export function TerminalManager({ worktrees, selectedWorktree, projectPath, main
           branch={selectedWorktreeData?.branch ?? selectedWorktreeData?.head.substring(0, 8) ?? ''}
           projectPath={projectPath}
           mainWorktreePath={mainWorktreePath}
+          aheadBehind={aheadBehind.get(selectedWorktree) ?? undefined}
           onStartTerminal={() => handleStartTerminal(selectedWorktree)}
           onReconnect={() => handleStartTerminal(selectedWorktree)}
           onWorktreeRemoved={onWorktreeRemoved}

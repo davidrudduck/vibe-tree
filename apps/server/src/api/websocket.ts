@@ -497,10 +497,13 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
 
           case 'tmux:list-all': {
             try {
-              const { execSync } = require('child_process');
+              const { exec } = require('child_process');
+              const { promisify } = require('util');
+              const execAsync2 = promisify(exec);
               let allSessions: Array<{ name: string; windows: number; created: string; attached: boolean; isVibeTree: boolean }> = [];
               try {
-                const output = execSync('tmux list-sessions -F "#{session_name}|#{session_windows}|#{session_created}|#{session_attached}"', { encoding: 'utf8' });
+                const { stdout } = await execAsync2('tmux list-sessions -F "#{session_name}|#{session_windows}|#{session_created}|#{session_attached}"', { encoding: 'utf8' });
+                const output = stdout;
                 allSessions = output.trim().split('\n').filter(Boolean).map((line: string) => {
                   const [name, windows, created, attached] = line.split('|');
                   return {
@@ -609,6 +612,10 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
               if (!session) throw new Error('Session not found');
               const updated = databaseService.terminalSessions.updateWorktreePath(sessionId, newWorktreePath);
               if (!updated) throw new Error('Failed to update session');
+              // Best-effort: update CWD in the running tmux session
+              try {
+                await shellManager.writeToShell(sessionId, `cd ${JSON.stringify(newWorktreePath)}\r`);
+              } catch { /* non-fatal — session may not be in memory */ }
               ws.send(JSON.stringify({
                 type: 'session:reassign:response',
                 payload: { success: true },
@@ -627,6 +634,10 @@ export function setupWebSocketHandlers(wss: WebSocketServer, services: Services)
           case 'git:merge-to-main': {
             try {
               const { branchName, mainWorktreePath } = message.payload;
+              if (!mainWorktreePath || !require('path').isAbsolute(mainWorktreePath) || mainWorktreePath.includes('..')) {
+                ws.send(JSON.stringify({ type: 'git:merge-to-main:response', payload: { success: false, error: 'Invalid path' }, id: message.id }));
+                break;
+              }
               const dirty = await hasUncommittedChanges(mainWorktreePath);
               if (dirty) {
                 ws.send(JSON.stringify({

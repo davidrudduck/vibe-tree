@@ -342,6 +342,11 @@ export function TerminalView({ worktreePath, onClose, onExited }: TerminalViewPr
     if (isSplit) {
       // Close split terminal
       if (splitSessionId) {
+        // Terminate the server-side session so the PTY and DB row are cleaned up
+        const adapter = getAdapter();
+        if (adapter) {
+          adapter.terminateSession(splitSessionId).catch(() => {});
+        }
         // Clean up event listeners
         splitCleanupRef.current.forEach(cleanup => cleanup());
         splitCleanupRef.current = [];
@@ -392,6 +397,11 @@ export function TerminalView({ worktreePath, onClose, onExited }: TerminalViewPr
 
   const closeSplitTerminal = () => {
     if (splitSessionId) {
+      // Terminate the server-side session so the PTY and DB row are cleaned up
+      const adapter = getAdapter();
+      if (adapter) {
+        adapter.terminateSession(splitSessionId).catch(() => {});
+      }
       // Clean up event listeners
       splitCleanupRef.current.forEach(cleanup => cleanup());
       splitCleanupRef.current = [];

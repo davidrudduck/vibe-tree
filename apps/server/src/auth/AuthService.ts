@@ -26,7 +26,10 @@ export class AuthService {
 
   constructor() {
     this.jwtSecret = process.env.JWT_SECRET || 'vibetree-dev-secret-change-in-production';
-    
+    if (!process.env.JWT_SECRET) {
+      console.warn('[AuthService] WARNING: JWT_SECRET env var not set — using insecure default. Set JWT_SECRET before deploying.');
+    }
+
     // Clean up expired tokens periodically
     setInterval(() => this.cleanupExpiredTokens(), 60000); // Every minute
     setInterval(() => this.cleanupExpiredUserSessions(), 60000); // Every minute
@@ -157,12 +160,17 @@ export class AuthService {
   validateCredentials(username: string, password: string): boolean {
     const expectedUsername = process.env.USERNAME;
     const expectedPassword = process.env.PASSWORD;
-    
+
     if (!expectedUsername || !expectedPassword) {
       return false;
     }
-    
-    return username === expectedUsername && password === expectedPassword;
+
+    // Use HMAC-based comparison to prevent timing and length oracle attacks
+    const key = crypto.randomBytes(32);
+    const hmac = (val: string) => crypto.createHmac('sha256', key).update(val).digest();
+    const usernameMatch = crypto.timingSafeEqual(hmac(username), hmac(expectedUsername));
+    const passwordMatch = crypto.timingSafeEqual(hmac(password), hmac(expectedPassword));
+    return usernameMatch && passwordMatch;
   }
 
   login(username: string, password: string): { success: boolean; sessionToken?: string; error?: string } {
