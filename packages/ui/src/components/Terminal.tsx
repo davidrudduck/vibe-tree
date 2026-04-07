@@ -231,10 +231,23 @@ export const Terminal: React.FC<TerminalProps> = ({
 
     // Open terminal in DOM container
     term.open(terminalRef.current);
-    
+
+    // Send extended key sequences for Shift+Enter and Ctrl+Enter so programs
+    // that support modifier-key aware input (Claude Code CLI, REPLs, etc.)
+    // can distinguish these from plain Enter.
+    term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+      if (event.type !== 'keydown') return true;
+      if (event.key === 'Enter' && (event.shiftKey || event.ctrlKey) && !event.altKey && !event.metaKey) {
+        const modifier = event.shiftKey ? 2 : 6; // shift=2, ctrl=6 per xterm spec
+        if (onData) onData(`\x1b[27;${modifier};13~`);
+        return false; // prevent default \r
+      }
+      return true;
+    });
+
     // Activate unicode support
     unicode11Addon.activate(term);
-    
+
     // Robust fit: tries FitAddon first, falls back to manual calculation if
     // FitAddon throws (e.g. when _core.viewport is not yet initialised in
     // xterm 5.6.0-beta and addon-fit 0.10.x accesses viewport.scrollBarWidth).

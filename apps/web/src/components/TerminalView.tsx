@@ -108,27 +108,10 @@ export function TerminalView({ worktreePath, onClose, onExited }: TerminalViewPr
             allCachedSessions: Array.from(terminalStateCache.keys())
           });
           
-          // Handle terminal state restoration like desktop app
-          if (!result.isNew) {
-            // Existing shell - restore cached state to fresh terminal
-            console.log('🔄 Existing shell session - restoring state');
-            const cachedState = terminalStateCache.get(actualSessionId);
-            if (cachedState && terminalRef.current) {
-              // Clear the fresh terminal first
-              terminalRef.current.clear();
-              // Restore the cached content after a delay to ensure terminal is ready
-              setTimeout(() => {
-                if (terminalRef.current && cachedState) {
-                  terminalRef.current.write(cachedState);
-                  console.log('✅ State restored for session:', actualSessionId);
-                }
-              }, 100);
-            } else {
-              console.log('⚠️ No cached state found for session:', actualSessionId);
-            }
-          } else {
-            // New shell - terminal is already clean
+          if (result.isNew) {
             console.log('🧹 New shell session - terminal ready');
+          } else {
+            console.log('🔄 Existing shell session - server will replay buffer');
           }
         } else {
           console.error('Failed to start shell session:', result.error);
