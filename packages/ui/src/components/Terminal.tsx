@@ -235,11 +235,45 @@ export const Terminal: React.FC<TerminalProps> = ({
     // Activate unicode support
     unicode11Addon.activate(term);
     
+    // Robust fit: tries FitAddon first, falls back to manual calculation if
+    // FitAddon throws (e.g. when _core.viewport is not yet initialised in
+    // xterm 5.6.0-beta and addon-fit 0.10.x accesses viewport.scrollBarWidth).
+    const performFit = (): boolean => {
+      const el = terminalRef.current;
+      if (!el || !el.parentElement) return false;
+
+      try {
+        fitAddon.fit();
+        return true;
+      } catch { /* fall through to manual resize */ }
+
+      // Manual fallback using the render service cell dimensions
+      try {
+        const core = (term as any)._core;
+        const dims = core?._renderService?.dimensions?.css?.cell;
+        if (!dims || dims.width === 0 || dims.height === 0) return false;
+
+        const parentStyle = window.getComputedStyle(el.parentElement);
+        const parentH = parseInt(parentStyle.height);
+        const parentW = parseInt(parentStyle.width);
+        if (!parentH || !parentW) return false;
+
+        // 15px is xterm's DEFAULT_SCROLL_BAR_WIDTH constant
+        const scrollbarWidth = (term.options.scrollback ?? 1) === 0 ? 0 : 15;
+        const cols = Math.max(2, Math.floor((parentW - scrollbarWidth) / dims.width));
+        const rows = Math.max(1, Math.floor(parentH / dims.height));
+
+        if (cols !== term.cols || rows !== term.rows) {
+          core._renderService.clear?.();
+          term.resize(cols, rows);
+        }
+        return true;
+      } catch { return false; }
+    };
+
     // Fit terminal to container after render
     setTimeout(() => {
-      try { fitAddon.fit(); } catch { /* terminal not ready */ }
-      // Explicitly resize terminal to ensure PTY knows the dimensions
-      term.resize(term.cols, term.rows);
+      performFit();
       term.focus();
     }, 10);
 
@@ -253,20 +287,11 @@ export const Terminal: React.FC<TerminalProps> = ({
     // Handle window resize
     const handleResize = () => {
       if (terminalRef.current && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
-        // First, fit the terminal to the container
-        try { fitAddon.fit(); } catch { return; } // Guard against uninitialized render service
-        
-        // Get the new dimensions after fitting
-        const newCols = term.cols;
-        const newRows = term.rows;
-        
-        // Explicitly resize the terminal to notify PTY of size change
-        // This is crucial for applications like vim to handle resize properly
-        term.resize(newCols, newRows);
-        
+        if (!performFit()) return;
+
         // Notify parent component of the resize
         if (onResize) {
-          onResize(newCols, newRows);
+          onResize(term.cols, term.rows);
         }
       }
     };
@@ -339,15 +364,32 @@ export const Terminal: React.FC<TerminalProps> = ({
     terminal.options.theme = getTerminalTheme(config.theme);
   }, [terminal, config.theme]);
 
-  // Safe fit helper — only call fit() when terminal element is attached and has dimensions
+  // Safe fit helper — only call fit() when terminal element is attached and has dimensions.
+  // Falls back to manual resize when FitAddon throws (addon-fit 0.10.x / xterm 5.6.0-beta).
   const safeFit = useCallback(() => {
     const el = terminal?.element;
     if (!el || !el.parentElement || el.parentElement.clientWidth === 0) return;
     try {
       fitAddonRef.current?.fit();
-    } catch {
-      // Terminal not ready for fitting yet
-    }
+      return;
+    } catch { /* fall through */ }
+    // Manual fallback
+    try {
+      const core = (terminal as any)._core;
+      const dims = core?._renderService?.dimensions?.css?.cell;
+      if (!dims || dims.width === 0 || dims.height === 0) return;
+      const parentStyle = window.getComputedStyle(el.parentElement);
+      const parentH = parseInt(parentStyle.height);
+      const parentW = parseInt(parentStyle.width);
+      if (!parentH || !parentW) return;
+      const scrollbarWidth = (terminal!.options.scrollback ?? 1) === 0 ? 0 : 15;
+      const cols = Math.max(2, Math.floor((parentW - scrollbarWidth) / dims.width));
+      const rows = Math.max(1, Math.floor(parentH / dims.height));
+      if (cols !== terminal!.cols || rows !== terminal!.rows) {
+        core._renderService.clear?.();
+        terminal!.resize(cols, rows);
+      }
+    } catch { /* truly failed */ }
   }, [terminal]);
 
   /**
@@ -482,11 +524,10 @@ export const Terminal: React.FC<TerminalProps> = ({
       focus: () => terminal.focus(),
       blur: () => terminal.blur(),
       serialize: () => serializeAddonRef.current?.serialize(),
-      fit: () => fitAddonRef.current?.fit(),
+      fit: () => safeFit(),
       resize: (cols: number, rows: number) => {
         terminal.resize(cols, rows);
-        // Also fit after resize to ensure proper display
-        fitAddonRef.current?.fit();
+        safeFit();
       },
       search: (query: string) => searchAddonRef.current?.findNext(query),
       searchPrevious: (query: string) => searchAddonRef.current?.findPrevious(query),

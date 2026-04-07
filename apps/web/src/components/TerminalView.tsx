@@ -202,6 +202,15 @@ export function TerminalView({ worktreePath, onClose, onExited }: TerminalViewPr
     };
   }, [splitSessionId]);
 
+  // Trigger resize when terminal session is first ready, so FitAddon fills the container.
+  // The Terminal component only mounts after sessionId is set (async startSession), so the
+  // initial 10ms fitAddon.fit() inside Terminal fires before the component exists.
+  useEffect(() => {
+    if (!sessionId) return;
+    const timer = setTimeout(() => window.dispatchEvent(new Event('resize')), 100);
+    return () => clearTimeout(timer);
+  }, [sessionId]);
+
   // Trigger resize when split state changes to ensure proper 50/50 layout
   useEffect(() => {
     const handleSplitResize = () => {
