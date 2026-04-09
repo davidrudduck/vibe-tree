@@ -318,8 +318,13 @@ export class TmuxSessionManager {
       maxBufferSize: 100000
     };
 
-    // Read existing output from file
-    if (fs.existsSync(outputFile)) {
+    // Ensure the output file exists so tail -f doesn't exit immediately.
+    // pipe-pane writes to this file but only once the pane produces output;
+    // touching it now lets tail follow it from the start.
+    if (!fs.existsSync(outputFile)) {
+      try { fs.writeFileSync(outputFile, ''); } catch { /* non-fatal */ }
+    } else {
+      // Read existing output into buffer
       try {
         const existingOutput = fs.readFileSync(outputFile, 'utf-8');
         if (existingOutput) {

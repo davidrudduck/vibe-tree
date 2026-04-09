@@ -6,11 +6,11 @@ import { WebSocketAdapter } from '../adapters/WebSocketAdapter';
 interface PullRequest {
   number: number;
   title: string;
-  head: { ref: string };
-  base: { ref: string };
+  branch: string;
+  baseBranch: string;
   draft: boolean;
-  labels: { name: string; color: string }[];
-  user: { login: string };
+  labels: string[];
+  author: string;
 }
 
 interface GitHubStatus {
@@ -201,7 +201,7 @@ export function PRStatusPanel({ projectPath, onClose }: PRStatusPanelProps) {
                     #{pr.number} {pr.title}
                   </div>
                   <div style={{ fontSize: '11px', color: 'var(--text-muted, #6b7280)', marginTop: '3px' }}>
-                    {pr.head.ref} → {pr.base.ref}
+                    {pr.branch} → {pr.baseBranch}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '5px', flexWrap: 'wrap' }}>
                     {pr.draft && (
@@ -218,22 +218,22 @@ export function PRStatusPanel({ projectPath, onClose }: PRStatusPanelProps) {
                     )}
                     {pr.labels.map((label) => (
                       <span
-                        key={label.name}
+                        key={label}
                         style={{
                           fontSize: '10px',
                           padding: '1px 6px',
                           borderRadius: '9999px',
-                          backgroundColor: `#${label.color}33`,
-                          color: `#${label.color}`,
+                          backgroundColor: 'rgba(100,100,100,0.2)',
+                          color: 'var(--text-muted, #9ca3af)',
                           fontWeight: 500,
-                          border: `1px solid #${label.color}66`,
+                          border: '1px solid rgba(100,100,100,0.4)',
                         }}
                       >
-                        {label.name}
+                        {label}
                       </span>
                     ))}
                     <span style={{ fontSize: '11px', color: 'var(--text-muted, #6b7280)', marginLeft: 'auto' }}>
-                      {pr.user.login}
+                      {pr.author}
                     </span>
                   </div>
                 </div>

@@ -108,27 +108,10 @@ export function TerminalView({ worktreePath, onClose, onExited }: TerminalViewPr
             allCachedSessions: Array.from(terminalStateCache.keys())
           });
           
-          // Handle terminal state restoration like desktop app
-          if (!result.isNew) {
-            // Existing shell - restore cached state to fresh terminal
-            console.log('🔄 Existing shell session - restoring state');
-            const cachedState = terminalStateCache.get(actualSessionId);
-            if (cachedState && terminalRef.current) {
-              // Clear the fresh terminal first
-              terminalRef.current.clear();
-              // Restore the cached content after a delay to ensure terminal is ready
-              setTimeout(() => {
-                if (terminalRef.current && cachedState) {
-                  terminalRef.current.write(cachedState);
-                  console.log('✅ State restored for session:', actualSessionId);
-                }
-              }, 100);
-            } else {
-              console.log('⚠️ No cached state found for session:', actualSessionId);
-            }
-          } else {
-            // New shell - terminal is already clean
+          if (result.isNew) {
             console.log('🧹 New shell session - terminal ready');
+          } else {
+            console.log('🔄 Existing shell session - server will replay buffer');
           }
         } else {
           console.error('Failed to start shell session:', result.error);
@@ -201,6 +184,15 @@ export function TerminalView({ worktreePath, onClose, onExited }: TerminalViewPr
       }
     };
   }, [splitSessionId]);
+
+  // Trigger resize when terminal session is first ready, so FitAddon fills the container.
+  // The Terminal component only mounts after sessionId is set (async startSession), so the
+  // initial 10ms fitAddon.fit() inside Terminal fires before the component exists.
+  useEffect(() => {
+    if (!sessionId) return;
+    const timer = setTimeout(() => window.dispatchEvent(new Event('resize')), 100);
+    return () => clearTimeout(timer);
+  }, [sessionId]);
 
   // Trigger resize when split state changes to ensure proper 50/50 layout
   useEffect(() => {
