@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { RefreshCw, FileText } from 'lucide-react';
 import { DiffView, DiffModeEnum } from '@git-diff-view/react';
 import '@git-diff-view/react/styles/diff-view.css';
@@ -18,15 +18,39 @@ interface GitDiffViewProps {
   theme?: 'light' | 'dark';
 }
 
+function parseDiffFiles(diff: string): GitFile[] {
+  const files: GitFile[] = [];
+  const sections = diff.split(/(?=^diff --git )/m).filter(Boolean);
+  for (const section of sections) {
+    const firstLine = section.split('\n')[0];
+    const match = firstLine.match(/^diff --git a\/.+ b\/(.+)$/);
+    if (!match) continue;
+    let status = 'M ';
+    if (section.includes('\nnew file mode')) status = 'A ';
+    else if (section.includes('\ndeleted file mode')) status = 'D ';
+    files.push({ path: match[1], status, staged: false, modified: false });
+  }
+  return files;
+}
+
+function extractFileDiff(diff: string, filePath: string): string {
+  const sections = diff.split(/(?=^diff --git )/m).filter(Boolean);
+  const section = sections.find(s => s.split('\n')[0].endsWith(` b/${filePath}`));
+  return section?.trim() ?? '';
+}
+
 export function GitDiffView({ worktreePath, theme = 'light' }: GitDiffViewProps) {
   const [files, setFiles] = useState<GitFile[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [diffText, setDiffText] = useState<string>('');
-  const [viewMode, setViewMode] = useState<'unstaged' | 'staged'>('unstaged');
+  const [viewMode, setViewMode] = useState<'unstaged' | 'staged' | 'branch'>('unstaged');
+  const [branchDiff, setBranchDiff] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { getAdapter } = useWebSocket();
+  const selectedFileRef = useRef<string | null>(null);
+  selectedFileRef.current = selectedFile;
 
   const loadGitStatus = useCallback(async () => {
     const adapter = getAdapter();
@@ -35,9 +59,9 @@ export function GitDiffView({ worktreePath, theme = 'light' }: GitDiffViewProps)
     try {
       setLoading(true);
       setError(null);
-      
+
       const status: GitStatus[] = await adapter.getGitStatus(worktreePath);
-      
+
       // Convert GitStatus to GitFile format
       const gitFiles: GitFile[] = status.map(file => ({
         path: file.path,
@@ -45,10 +69,10 @@ export function GitDiffView({ worktreePath, theme = 'light' }: GitDiffViewProps)
         staged: file.status[0] !== ' ' && file.status[0] !== '?',
         modified: file.status[1] !== ' ' && file.status[1] !== '?'
       }));
-      
+
       setFiles(gitFiles);
-      
-      if (gitFiles.length > 0 && !selectedFile) {
+
+      if (gitFiles.length > 0 && !selectedFileRef.current) {
         setSelectedFile(gitFiles[0].path);
       }
     } catch (err) {
@@ -57,7 +81,7 @@ export function GitDiffView({ worktreePath, theme = 'light' }: GitDiffViewProps)
     } finally {
       setLoading(false);
     }
-  }, [worktreePath, selectedFile, getAdapter]);
+  }, [worktreePath, getAdapter]);
 
   const loadDiff = useCallback(async (filePath: string, staged: boolean = false) => {
     const adapter = getAdapter();
@@ -66,11 +90,11 @@ export function GitDiffView({ worktreePath, theme = 'light' }: GitDiffViewProps)
     try {
       setLoading(true);
       setError(null);
-      
-      const diffTextResult = staged 
+
+      const diffTextResult = staged
         ? await adapter.getGitDiffStaged(worktreePath, filePath)
         : await adapter.getGitDiff(worktreePath, filePath);
-      
+
       // Handle undefined/null results safely
       setDiffText(diffTextResult ? diffTextResult.trim() : '');
     } catch (err) {
@@ -81,27 +105,54 @@ export function GitDiffView({ worktreePath, theme = 'light' }: GitDiffViewProps)
     }
   }, [worktreePath, getAdapter]);
 
-  useEffect(() => {
-    if (worktreePath) {
-      loadGitStatus();
+  const loadBranchDiff = useCallback(async () => {
+    const adapter = getAdapter();
+    if (!adapter) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const mainBranch = await (adapter as any).getMainBranchName(worktreePath).catch(() => 'main');
+      const diff: string = await (adapter as any).getDiffVsMain(worktreePath, mainBranch) ?? '';
+      setBranchDiff(diff);
+      const parsedFiles = parseDiffFiles(diff);
+      setFiles(parsedFiles);
+      setSelectedFile(parsedFiles.length > 0 ? parsedFiles[0].path : null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load branch diff');
+      setFiles([]);
+    } finally {
+      setLoading(false);
     }
-  }, [worktreePath, loadGitStatus]);
+  }, [worktreePath, getAdapter]);
 
   useEffect(() => {
-    if (selectedFile) {
-      const file = files.find(f => f.path === selectedFile);
-      if (file) {
-        const shouldLoadStaged = viewMode === 'staged' && file.staged;
-        const shouldLoadUnstaged = viewMode === 'unstaged' && file.modified;
-        
-        if (shouldLoadStaged || shouldLoadUnstaged) {
-          loadDiff(selectedFile, viewMode === 'staged');
-        } else {
-          setDiffText('');
-        }
+    if (!worktreePath) return;
+    if (viewMode === 'branch') loadBranchDiff();
+    else loadGitStatus();
+  }, [worktreePath, viewMode, loadGitStatus, loadBranchDiff]);
+
+  useEffect(() => {
+    if (!selectedFile) return;
+
+    if (viewMode === 'branch') {
+      setDiffText(extractFileDiff(branchDiff, selectedFile));
+      return;
+    }
+
+    const file = files.find((f: GitFile) => f.path === selectedFile);
+    if (file) {
+      const shouldLoadStaged = viewMode === 'staged' && file.staged;
+      const shouldLoadUnstaged = viewMode === 'unstaged' && file.modified;
+
+      if (shouldLoadStaged || shouldLoadUnstaged) {
+        loadDiff(selectedFile, viewMode === 'staged');
+      } else {
+        setDiffText('');
       }
     }
-  }, [selectedFile, viewMode, files, loadDiff]);
+  }, [selectedFile, viewMode, files, loadDiff, branchDiff]);
 
   const getStatusIcon = (status: string) => {
     switch (status[0]) {
@@ -135,8 +186,8 @@ export function GitDiffView({ worktreePath, theme = 'light' }: GitDiffViewProps)
           <div className="flex border rounded-md">
             <button
               className={`px-3 py-1 text-sm rounded-l-md transition-colors ${
-                viewMode === 'unstaged' 
-                  ? 'bg-primary text-primary-foreground' 
+                viewMode === 'unstaged'
+                  ? 'bg-primary text-primary-foreground'
                   : 'bg-background hover:bg-muted'
               }`}
               onClick={() => setViewMode('unstaged')}
@@ -144,18 +195,28 @@ export function GitDiffView({ worktreePath, theme = 'light' }: GitDiffViewProps)
               Unstaged
             </button>
             <button
-              className={`px-3 py-1 text-sm rounded-r-md border-l transition-colors ${
-                viewMode === 'staged' 
-                  ? 'bg-primary text-primary-foreground' 
+              className={`px-3 py-1 text-sm border-l transition-colors ${
+                viewMode === 'staged'
+                  ? 'bg-primary text-primary-foreground'
                   : 'bg-background hover:bg-muted'
               }`}
               onClick={() => setViewMode('staged')}
             >
               Staged
             </button>
+            <button
+              className={`px-3 py-1 text-sm rounded-r-md border-l transition-colors ${
+                viewMode === 'branch'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-background hover:bg-muted'
+              }`}
+              onClick={() => setViewMode('branch')}
+            >
+              Branch
+            </button>
           </div>
           <button
-            onClick={loadGitStatus}
+            onClick={viewMode === 'branch' ? loadBranchDiff : loadGitStatus}
             disabled={loading}
             className="p-2 hover:bg-accent rounded transition-colors disabled:opacity-50"
           >
@@ -169,7 +230,7 @@ export function GitDiffView({ worktreePath, theme = 'light' }: GitDiffViewProps)
         <div className="w-80 border-r flex flex-col min-w-0">
           <div className="p-3 border-b bg-muted/50">
             <h4 className="text-sm font-medium">
-              {viewMode === 'staged' ? 'Staged Changes' : 'Unstaged Changes'} ({filteredFiles.length})
+              {viewMode === 'staged' ? 'Staged Changes' : viewMode === 'branch' ? 'Branch Changes' : 'Unstaged Changes'} ({filteredFiles.length})
             </h4>
           </div>
           <div className="flex-1 overflow-auto">
